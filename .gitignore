@@ -1,0 +1,18 @@
+# Cache local : contient le jeton d'authentification RaceOS et le profil du
+# joueur. Ne doit jamais partir dans un depot.
+.cache/
+
+# Produits de compilation
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Divers
+*.log
+Thumbs.db

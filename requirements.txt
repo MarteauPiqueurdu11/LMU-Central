@@ -1,0 +1,10 @@
+# Interface du hub
+customtkinter>=6.0.0
+
+# Module Remap volant
+pygame>=2.5.0
+keyboard>=0.13.5
+pillow>=10.0.0
+
+# Construction de l'executable
+pyinstaller>=6.0.0
