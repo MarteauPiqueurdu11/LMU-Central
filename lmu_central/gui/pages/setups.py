@@ -3,7 +3,8 @@
 Deux panneaux. A gauche la collection, filtrable par circuit, par voiture et
 par categorie ; a droite le setup choisi, mis en forme comme le garage du jeu.
 Epingler un premier setup puis en choisir un second bascule le panneau de
-droite en comparaison.
+droite en comparaison. « Voir dans le dossier » ouvre l'Explorateur sur le
+fichier du setup choisi.
 
 Choisir un circuit seul regroupe la liste par voiture — la question qu'on se
 pose en arrivant sur un circuit est « qu'est-ce que j'ai ici, et pour quelle
@@ -19,6 +20,7 @@ import os
 
 import customtkinter as ctk
 
+from ...core import explorateur
 from ...core import setups as st
 from ...core.errors import HubError
 from .. import responsive, theme
@@ -507,6 +509,22 @@ class SetupsPage(Page):
         self.clipboard_append(texte)
         self.app.set_status("Copié dans le presse-papiers")
 
+    def voir_dans_le_dossier(self):
+        """Ouvre l'Explorateur sur le fichier du setup choisi, deja selectionne.
+
+        Le setup choisi, y compris en comparaison : c'est celui que la liste
+        met en evidence, et la barre d'etat dit lequel on a ouvert.
+        """
+        setup = self.choisi
+        try:
+            explorateur.montrer(setup.chemin)
+        except HubError as exc:
+            # La barre d'etat tient sur une ligne ; l'erreur en a deux.
+            message = " ".join(ligne.strip() for ligne in str(exc).splitlines())
+            self.app.set_status(message, error=True)
+            return
+        self.app.set_status(f"Dossier ouvert sur {setup.chemin.name}")
+
     # --- panneau de droite ---
 
     def _peindre_detail(self):
@@ -640,17 +658,29 @@ class SetupsPage(Page):
                       hover_color=theme.BORDER if epingle else theme.ACCENT_HI,
                       text_color=theme.TEXT,
                       command=self.epingler).grid(row=0, column=colonne)
+        ctk.CTkButton(barre, text="Voir dans le dossier", width=148, height=28,
+                      corner_radius=8, font=self.f["small"],
+                      fg_color=theme.SURFACE_HI, hover_color=theme.BORDER,
+                      text_color=theme.TEXT,
+                      command=self.voir_dans_le_dossier).grid(
+            row=0, column=colonne + 1, padx=(8, 0))
         ctk.CTkButton(barre, text="Copier", width=84, height=28, corner_radius=8,
                       font=self.f["small"], fg_color=theme.SURFACE_HI,
                       hover_color=theme.BORDER, text_color=theme.TEXT,
-                      command=self.copier).grid(row=0, column=colonne + 1,
+                      command=self.copier).grid(row=0, column=colonne + 2,
                                                 padx=(8, 0))
 
         if epingle:
+            # Sous les boutons et non a leur suite : a quatre boutons la ligne
+            # n'a plus la place d'un nom entier, meme a la taille par defaut, et
+            # une note qui deborde pousse tout le panneau hors de la fenetre.
             note = ctk.CTkLabel(
-                barre, text="  épinglé : " + tronquer(self.epingle.nom, 220),
-                font=self.f["tiny"], text_color=theme.ACCENT, anchor="w")
-            note.grid(row=0, column=colonne + 2, sticky="ew", padx=(10, 0))
+                barre, text="épinglé : " + self.epingle.nom,
+                font=self.f["tiny"], text_color=theme.ACCENT, anchor="w",
+                justify="left")
+            note.grid(row=1, column=0, columnspan=colonne + 3, sticky="ew",
+                      pady=(6, 0))
+            self._replier(note)
 
     def _largeur_detail(self):
         """Place offerte au panneau de droite, mesuree sur la page.

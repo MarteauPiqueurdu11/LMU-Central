@@ -241,9 +241,10 @@ class CalendrierPage(Page):
                     "ouverte.\nLance Le Mans Ultimate, puis Actualiser.")
             else:
                 self._note_amis(
-                    "Aucun ami inscrit à une épreuve pour le moment.\n"
-                    "Le serveur ne publie que les inscriptions : savoir qu'un ami est "
-                    "en solo ou en essais libres n'est pas possible.")
+                    "Aucun ami inscrit ou en course pour le moment.\n"
+                    "Une course déjà lancée n'apparaît que si le hub l'a vue avant son "
+                    "départ. Savoir qu'un ami est en solo ou en essais libres n'est pas "
+                    "possible.")
             return
 
         for enfant in self.liste_amis.winfo_children():
@@ -271,7 +272,7 @@ class CalendrierPage(Page):
         restant = epreuve.minutes_avant()
         if restant is None:
             return theme.TEXT_FAINT
-        if restant <= 0:
+        if restant <= 0 or epreuve.lancee:
             return theme.OK
         return theme.ACCENT if restant <= IMMINENT_MIN else theme.TEXT_DIM
 

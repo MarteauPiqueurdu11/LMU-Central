@@ -37,6 +37,20 @@ les prochaines heures.
 **Ce qui exige le jeu** : les amis et le nombre d'inscrits. Ce sont des donnees
 vivantes et personnelles, derriere un jeton de 30 minutes qu'on n'obtient que
 par un ticket Steam — donc jeu ouvert, ou ferme depuis moins d'une demi-heure.
+
+**Les epreuves lancees** echappent a tout cela. Des qu'une epreuve passe en
+`Running` — aux essais, avant meme le depart de la course — elle disparait de
+`daily/list` comme de `special-events`, et `event/overview` ne donne plus ses
+`friends`. Deux parades :
+
+    memoire locale
+        Chaque epreuve vue avant son depart est retenue avec son identifiant
+        (`_memoriser`). Une fois lancee, on la retrouve la.
+
+    GET  api/v1/event/entries/{type}/{id}?page={p}&take={n}
+        Les engages, qui eux restent servis pendant la course : nom et avatar
+        Steam, sans identifiant de joueur. On les croise avec la liste d'amis.
+        `page` commence a 1 — `page=0` renvoie la meme chose que `page=1`.
 """
 
 import datetime
@@ -67,6 +81,25 @@ ENRICHIES = 8
 # suffisent a planifier, et restent dans la semaine en cours.
 HORIZON_JOURS = 2
 JOUR = datetime.timedelta(days=1)
+
+# Engages demandes par page a `event/entries`. Une quotidienne en compte 80 :
+# une seule page suffit presque toujours.
+ENGAGES_PAR_PAGE = 100
+PAGES_MAX = 10
+
+# L'avatar Steam porte une empreinte stable, quel que soit le format demande
+# (`_medium`, `_full`) : plus sur que le nom, qu'un joueur peut changer.
+EMPREINTE = re.compile(r"[0-9a-f]{40}")
+
+# Statut d'une epreuve dont les sessions ont commence. Elle quitte alors les
+# listes, parfois quelques minutes AVANT son horaire affiche : mesure a 10:54:53
+# pour une epreuve de 10:55. Avant (`Waiting`, `ServersStarted`,
+# `ServersRunning`), elle est listee et `friends` est servi.
+STATUT_LANCEE = "Running"
+
+# Ce qu'on retient d'une epreuve pour la reconstruire une fois lancee.
+CHAMPS_MEMOIRE = ("identifiant", "type", "niveau", "nom", "circuit", "debut",
+                  "duree", "voitures", "series_id", "rang_requis", "fin")
 
 
 def _moment(iso):
@@ -120,6 +153,11 @@ class Ami:
         self.nom = brut.get("name") or brut.get("username") or "?"
         self.avatar = brut.get("avatar") or ""
 
+    @property
+    def empreinte(self):
+        trouvee = EMPREINTE.search(self.avatar)
+        return trouvee.group(0) if trouvee else ""
+
 
 class Epreuve:
     """Une occurrence datee d'une serie."""
@@ -143,6 +181,9 @@ class Epreuve:
         self.complet = False
         self.amis = []
         self.rang_requis = ""
+        # Fin de course annoncee par le backend (`raceEndsAt`). La duree de la
+        # rotation ne compte que la course, sans essais ni qualification.
+        self.fin = ""
 
     # --- horaires ---
 
@@ -154,20 +195,44 @@ class Epreuve:
 
     @property
     def passee(self):
+        fin = _moment(self.fin)
+        if fin is not None:
+            return maintenant() > fin
         restant = self.minutes_avant()
         return restant is not None and restant < -max(self.duree, 60)
 
     @property
     def en_cours(self):
         restant = self.minutes_avant()
-        return restant is not None and -max(self.duree, 60) <= restant <= 0
+        return restant is not None and restant <= 0 and not self.passee
+
+    @property
+    def lancee(self):
+        """Serveurs en piste : le backend le dit parfois avant l'horaire."""
+        return not self.passee and (self.statut == STATUT_LANCEE or self.en_cours)
+
+    # --- memoire locale ---
+
+    def memoire(self):
+        return {champ: getattr(self, champ) for champ in CHAMPS_MEMOIRE}
+
+    @classmethod
+    def depuis_memoire(cls, brut):
+        epreuve = cls(brut.get("niveau"), brut.get("nom"), brut.get("circuit"),
+                      brut.get("debut"), brut.get("duree") or 0,
+                      brut.get("voitures") or (), brut.get("series_id") or "",
+                      brut.get("type") or "daily")
+        epreuve.identifiant = brut.get("identifiant") or ""
+        epreuve.rang_requis = brut.get("rang_requis") or ""
+        epreuve.fin = brut.get("fin") or ""
+        return epreuve
 
     def compte_a_rebours(self):
         """« dans 12 min », « dans 2 h 05 », « en cours », « terminée »."""
         restant = self.minutes_avant()
         if restant is None:
             return "?"
-        if restant <= 0:
+        if restant <= 0 or self.lancee:
             return "terminée" if self.passee else "en cours"
         if restant < 60:
             return f"dans {restant:.0f} min"
@@ -185,6 +250,7 @@ class Epreuve:
         self.identifiant = brut.get("id") or ""
         self.statut = brut.get("status") or ""
         self.type = brut.get("type") or self.type
+        self.fin = brut.get("raceEndsAt") or self.fin
         self.rang_requis = " ".join(
             str(x) for x in (exigence.get("rank"), exigence.get("tier")) if x)
 
@@ -199,6 +265,7 @@ class Epreuve:
         self.complet = bool(brut.get("eventFull"))
         self.amis = [Ami(a) for a in (brut.get("friends") or [])]
         self.statut = brut.get("status") or self.statut
+        self.fin = brut.get("raceEndsAt") or self.fin
 
 
 class Calendrier:
@@ -380,6 +447,7 @@ def charger(ctx, enrichies=ENRICHIES):
         if brut is not None:
             epreuve.rattacher(brut)
 
+    _memoriser(epreuves)
     _enrichir(ros, epreuves, enrichies)
 
     try:
@@ -392,6 +460,79 @@ def charger(ctx, enrichies=ENRICHIES):
     return Calendrier(epreuves, amis_connus=True)
 
 
+def _memoriser(epreuves):
+    """Retrouve les epreuves lancees, et retient celles qui ne le sont pas encore.
+
+    Le backend retire une epreuve de `daily/list` et de `special-events` des
+    qu'elle passe en `Running`. Sans memoire, l'identifiant d'une quotidienne
+    lancee est perdu — et une epreuve speciale lancee disparait tout entiere
+    du calendrier, six heures durant pour une course de six heures. Or c'est
+    precisement la qu'on cherche ses amis.
+
+    Limite assumee : une epreuve deja lancee au premier lancement du hub n'a
+    jamais ete vue, et reste introuvable.
+    """
+    memoire = cache.load_occurrences()
+    identifiees = {e.identifiant for e in epreuves if e.identifiant}
+    par_depart = {(e.series_id, e.debut): e for e in epreuves}
+
+    # Retenue, pas terminee, mais absente des listes : elle est donc lancee —
+    # y compris quand son horaire affiche n'est pas encore atteint.
+    for brut in memoire.values():
+        connue = Epreuve.depuis_memoire(brut)
+        if connue.identifiant in identifiees or connue.passee:
+            continue
+        connue.statut = STATUT_LANCEE
+        existante = par_depart.get((connue.series_id, connue.debut))
+        if existante is None:
+            epreuves.append(connue)          # speciale : absente de la reponse
+        elif not existante.identifiant:
+            existante.identifiant = connue.identifiant
+            existante.type = connue.type
+            existante.statut = STATUT_LANCEE
+
+    retenues = {cle: brut for cle, brut in memoire.items()
+                if not Epreuve.depuis_memoire(brut).passee}
+    for epreuve in epreuves:
+        if epreuve.identifiant and not epreuve.passee:
+            retenues[epreuve.identifiant] = epreuve.memoire()
+    try:
+        cache.save_occurrences(retenues)
+    except OSError:
+        pass
+
+
+def _engages(ros, epreuve):
+    """Tous les engages d'une epreuve, page apres page."""
+    engages = []
+    for page in range(1, PAGES_MAX + 1):
+        lot = ros.fetch(f"api/v1/event/entries/{epreuve.type}/{epreuve.identifiant}"
+                        f"?page={page}&take={ENGAGES_PAR_PAGE}", method="GET") or []
+        engages.extend(lot)
+        if len(lot) < ENGAGES_PAR_PAGE:
+            break
+    return engages
+
+
+def _amis_parmi(engages, amis):
+    """Les amis presents parmi les engages, equipiers compris.
+
+    `event/entries` ne donne pas d'identifiant de joueur : on reconnait un ami
+    a l'empreinte de son avatar Steam, a defaut a son nom.
+    """
+    par_empreinte = {a.empreinte: a for a in amis if a.empreinte}
+    par_nom = {a.nom.casefold(): a for a in amis}
+    trouves = []
+    for engage in engages:
+        for pilote in [engage] + list(engage.get("teamMembers") or []):
+            candidat = Ami(pilote)
+            ami = (par_empreinte.get(candidat.empreinte)
+                   or par_nom.get(candidat.nom.casefold()))
+            if ami is not None and ami not in trouves:
+                trouves.append(ami)
+    return trouves
+
+
 def _enrichir(ros, epreuves, combien):
     """Ajoute splits et amis aux prochaines epreuves identifiees.
 
@@ -400,6 +541,9 @@ def _enrichir(ros, epreuves, combien):
     forcement quotidiennes : un quota global aurait condamne les epreuves
     speciales a ne jamais montrer leurs amis inscrits, alors que ce sont
     justement celles qu'on prepare a l'avance.
+
+    Une epreuve lancee ne publie plus ses `friends` : on lit alors ses engages,
+    et la liste d'amis n'est demandee qu'a ce moment-la.
     """
     proches = []
     for type_epreuve in {e.type for e in epreuves}:
@@ -407,6 +551,7 @@ def _enrichir(ros, epreuves, combien):
             [e for e in sorted(epreuves, key=lambda e: e.debut)
              if e.type == type_epreuve and e.identifiant and not e.passee][:combien])
 
+    amis = None
     for epreuve in proches:
         try:
             detail = ros.fetch("api/v1/event/overview",
@@ -414,9 +559,19 @@ def _enrichir(ros, epreuves, combien):
                                      "eventId": epreuve.identifiant},
                                method="POST")
         except HubError:
-            continue
+            detail = None
         if isinstance(detail, dict):
             epreuve.detailler(detail)
+
+        if not epreuve.lancee or epreuve.amis:
+            continue
+        try:
+            if amis is None:
+                amis = [Ami(a) for a in ros.friends()]
+            if amis:
+                epreuve.amis = _amis_parmi(_engages(ros, epreuve), amis)
+        except HubError:
+            continue
 
 
 def _resume_speciales(series):
