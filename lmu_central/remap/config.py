@@ -71,35 +71,29 @@ def _entretenir_le_secours(config):
 def _emplacements_de_secours():
     """Tous les endroits ou une configuration connue peut se trouver.
 
-    Du plus frais au plus ancien. La copie entretenue a cote de l'executable
-    passe avant celle embarquee dedans, qui date de la compilation.
+    Du plus frais au plus ancien. Toutes appartiennent a l'utilisateur
+    courant : **aucune ne vient de l'interieur du programme**. Une copie
+    embarquee a la compilation serait celle de qui a compile, et elle
+    s'installerait toute seule au premier lancement chez n'importe qui
+    d'autre — macros etrangeres, numeros de boutons d'un autre volant. Le
+    filet doit rattraper une configuration perdue, jamais en inventer une.
 
-    En .exe, `os.path.abspath(__file__)` designe le dossier temporaire ou
-    PyInstaller deballe le programme : le dossier du projet n'y est pas. La
-    copie de secours doit donc **etre embarquee**, et on regarde aussi a cote
-    de l'executable — c'est le seul endroit qui reste accessible quand
-    l'application tourne sous un autre profil Windows, par exemple apres une
-    elevation en administrateur.
+    Reste donc le dossier de l'executable : le seul endroit qui appartienne a
+    l'utilisateur et qui reste accessible quand l'application tourne sous un
+    autre profil Windows, par exemple apres une elevation en administrateur.
+    Cette copie-la, c'est l'application elle-meme qui l'ecrit, sur la machine
+    de celui qui s'en sert — elle ne peut donc contenir que ses reglages.
+
+    En developpement la liste est vide : la configuration vit dans `.cache/`,
+    et il n'y a pas de second profil Windows dont il faudrait se proteger.
     """
     chemins = []
 
-    embarque = getattr(sys, "_MEIPASS", None)
-    if embarque:
+    if getattr(sys, "_MEIPASS", None):
         pres_de_l_exe = os.path.dirname(os.path.abspath(sys.executable))
         for dossier in (pres_de_l_exe, os.path.dirname(pres_de_l_exe)):
             chemins.append(os.path.join(dossier, DOSSIER_SECOURS, NOM_SECOURS))
             chemins.append(os.path.join(dossier, NOM_SECOURS))
-        chemins.append(os.path.join(embarque, DOSSIER_SECOURS, NOM_SECOURS))
-
-    # Copie conservee dans le projet : survit a la suppression du dossier
-    # d'origine (voir sauvegardes/LISEZ-MOI.md).
-    projet = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))))
-    chemins.append(os.path.join(projet, DOSSIER_SECOURS, NOM_SECOURS))
-
-    # Emplacement de l'application autonome, si elle est encore installee.
-    chemins.append(os.path.join(os.path.expanduser("~"), "Documents",
-                                "Remap Volant", "config.json"))
     return chemins
 
 
@@ -228,8 +222,11 @@ def _completer_molettes(config):
 def charger():
     """Renvoie la configuration, en creant le fichier au besoin.
 
-    Au tout premier lancement, reprend la configuration de l'application
-    autonome si elle existe, plutot que de repartir des valeurs par defaut.
+    Au premier lancement sur une machine, il n'y a rien a reprendre : les
+    molettes partent vides et c'est le bouton « Detecter » qui apprend les
+    boutons de ce volant-la. Le filet de secours ne sert qu'a retrouver une
+    configuration **deja ecrite par cet utilisateur** et devenue invisible,
+    typiquement apres une elevation en administrateur.
     """
     global ancienne_origine
     ancienne_origine = None

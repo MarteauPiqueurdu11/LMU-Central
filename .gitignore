@@ -2,6 +2,12 @@
 # joueur. Ne doit jamais partir dans un depot.
 .cache/
 
+# Sauvegardes personnelles : macros, numeros de boutons d'un volant precis,
+# reglages de controles, archives de code. Propres a une machine et a son
+# proprietaire — et une configuration livree avec le programme s'installerait
+# toute seule chez ceux qui le telechargent (voir docs/notes-techniques.md).
+sauvegardes/
+
 # Produits de compilation
 build/
 dist/

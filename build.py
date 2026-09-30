@@ -35,11 +35,13 @@ def main():
         # l'icone que Tk porte, pas celle du binaire, et la barre laterale
         # affiche le logo en PNG.
         "--add-data", f"{ROOT / 'assets'}{os.pathsep}assets",
-        # Filet de securite des molettes. Sans lui, un .exe qui ne trouve pas
-        # la configuration de l'utilisateur — profil different apres une
-        # elevation, par exemple — repart des valeurs d'usine en silence.
-        "--add-data", (f"{ROOT / 'sauvegardes' / 'remap-config-origine.json'}"
-                       f"{os.pathsep}sauvegardes"),
+        # Rien de plus n'est embarque ici. La configuration des molettes, en
+        # particulier, ne doit PAS l'etre : elle contient les macros et les
+        # numeros de boutons de qui a compile. Embarquee, elle s'installait
+        # toute seule au premier lancement sur la machine de n'importe qui
+        # d'autre — des raccourcis etrangers, sur un volant qui n'a pas les
+        # memes boutons. Le filet de securite passe par la copie tenue a jour
+        # a cote de l'executable (voir remap/config.py).
         "--collect-all", "customtkinter",  # embarque ses themes JSON
         # Indispensable : les modules et pages sont decouverts dynamiquement par
         # pkgutil. Sans cette option, PyInstaller ne les embarque pas (aucun
