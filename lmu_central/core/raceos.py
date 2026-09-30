@@ -30,7 +30,10 @@ class RaceOS:
         self.expires_at = None
         self.player = None
         self.banned = False
-        self.from_cache = False
+        # Vrai quand le dernier appel a authenticate() a reellement relu le
+        # profil aupres du serveur, faux s'il a rendu une valeur memorisee.
+        self.profil_relu = False
+        self.profil_date = None  # date de capture du profil courant
 
     # --- transport ---
 
@@ -58,8 +61,14 @@ class RaceOS:
         laps de temps, le hub fonctionne meme si le jeu a ete ferme. Passe ce
         delai, le jeu doit etre relance — le backend n'offre aucun mecanisme de
         renouvellement, seul le jeu peut fournir un nouveau ticket Steam.
+
+        Attention au profil rendu sans `force` : c'est celui du dernier relevé,
+        fige. Une course disputee entre-temps ne s'y voit pas — seul un nouvel
+        appel a /authenticate publie le rating a jour, et il reclame le jeu.
+        L'appelant lit `profil_relu` pour savoir a quoi il a affaire.
         """
         if self.player is not None and not force:
+            self.profil_relu = False
             return self.player
 
         if not force:
@@ -68,7 +77,8 @@ class RaceOS:
                 self.access_token = session["accessToken"]
                 self.expires_at = session["expiresAt"]
                 self.player = session["player"]
-                self.from_cache = True
+                self.profil_relu = False
+                self.profil_date = session.get("fetchedAt")
                 return self.player
 
         body = {"token": self.local.auth_session_ticket(), "game": GAME, "platform": PLATFORM}
@@ -79,8 +89,9 @@ class RaceOS:
         self.expires_at = payload.get("expiresAt")
         self.player = payload.get("player") or {}
         self.banned = payload.get("banned", False)
-        self.from_cache = False
-        cache.save_session(self.access_token, self.expires_at, self.player)
+        self.profil_relu = True
+        self.profil_date = cache.save_session(self.access_token, self.expires_at,
+                                              self.player)
         return self.player
 
     def fetch(self, endpoint, body=None, method="POST"):

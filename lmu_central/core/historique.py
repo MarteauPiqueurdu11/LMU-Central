@@ -82,10 +82,13 @@ def _point(dr, sr):
 def enregistrer(ratings):
     """Releve les valeurs si elles ont bouge. Renvoie le point ajoute, ou None.
 
-    Les donnees hors ligne et les valeurs tronquees (elo a 0) sont ignorees :
-    elles fausseraient les ecarts.
+    Trois cas sont ignores, parce qu'ils fausseraient les ecarts : les donnees
+    hors ligne, les valeurs tronquees (elo a 0), et un profil qui n'a pas ete
+    relu — resservi depuis la session, il redonne le rating d'avant la course
+    et le daterait d'aujourd'hui. Ce releve-la a deja ete fait a sa date.
     """
-    if ratings.offline or not ratings.driver_rank.get("elo"):
+    if (ratings.offline or ratings.profil_date
+            or not ratings.driver_rank.get("elo")):
         return None
 
     points = _lire()

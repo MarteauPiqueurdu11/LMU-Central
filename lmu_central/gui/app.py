@@ -19,8 +19,16 @@ SIDEBAR_W = 210
 SIDEBAR_W_COMPACT = 156
 SEUIL_SIDEBAR = 900
 
-# Fonctionnalites annoncees mais pas encore disponibles.
-ROADMAP = ["Overlays télémétrie", "Stratégie carburant"]
+# Relevé de fin de course. Les trois premiers delais couvrent le cas normal :
+# le backend met quelques instants a publier le nouveau rating. Au-dela, on
+# passe a une cadence lente, parce que l'autre cas d'echec dure, lui : relever
+# le rating exige un ticket Steam que seul le jeu fournit, donc un joueur qui
+# a ferme LMU en sortant de sa course n'a plus rien de relevable tant qu'il ne
+# le relance pas. Abandonner au bout de cinq minutes, c'est perdre pour de bon
+# le pourcentage de sa course — il n'existe nulle part ailleurs.
+DELAIS_RELEVE = (45_000, 120_000, 300_000)
+PERIODE_RELEVE = 300_000
+TENTATIVES_MAX = 24  # environ deux heures
 
 
 class App(ctk.CTk):
@@ -44,6 +52,7 @@ class App(ctk.CTk):
         # Suivi des sessions de jeu, pour relever le rating en fin de course.
         self._en_session = False
         self._releve_attendu = False
+        self._tentatives_releve = 0
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -113,14 +122,6 @@ class App(ctk.CTk):
         self.nav.grid(row=1, column=0, sticky="nsew", padx=6)
         self.nav.grid_columnconfigure(0, weight=1)
         responsive.ascenseur_discret(self.nav, theme.SURFACE)
-
-        soon = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        soon.grid(row=2, column=0, sticky="ew", padx=20, pady=(8, 16))
-        ctk.CTkLabel(soon, text="À VENIR", font=self.f["tiny"],
-                     text_color=theme.TEXT_FAINT).pack(anchor="w", pady=(0, 4))
-        for item in ROADMAP:
-            ctk.CTkLabel(soon, text=item, font=self.f["tiny"],
-                         text_color=theme.TEXT_FAINT).pack(anchor="w")
 
         responsive.suivre_paliers(self, (SEUIL_SIDEBAR,), self._ajuster_sidebar)
 
@@ -275,24 +276,26 @@ class App(ctk.CTk):
     # --- releve automatique du rating ---
 
     def _planifier_releves(self):
-        """Le backend met quelques instants a publier le nouveau rating.
+        """Lance la serie de tentatives qui suit une fin de course.
 
-        On retente donc plusieurs fois apres la fin de course, et on s'arrete
-        des qu'une valeur differente est relevee.
+        Chaque tentative se reprogramme elle-meme tant qu'elle n'a rien
+        releve : le rating peut n'etre pas encore publie, ou le jeu avoir ete
+        ferme trop vite pour fournir un ticket.
         """
         self._releve_attendu = True
-        self.set_status("Course terminee — relevé du rating en attente…")
-        for delai in (45_000, 120_000, 300_000):
-            self.after(delai, self._tenter_releve)
+        self._tentatives_releve = 0
+        self.set_status("Course terminée — relevé du rating en attente…")
+        self.after(DELAIS_RELEVE[0], self._tenter_releve)
 
     def _tenter_releve(self):
         if not self._releve_attendu:
             return
         self.run_async(lambda: historique.relever(self.ctx),
-                       self._releve_fait, lambda exc: None)
+                       self._releve_fait, self._releve_echoue)
 
     def _releve_fait(self, point):
         if not point:
+            self._reprogrammer_releve()  # rating pas encore publie
             return
         self._releve_attendu = False
         self.set_status(
@@ -301,6 +304,29 @@ class App(ctk.CTk):
         page = self.pages.get("ratings")
         if page is not None and getattr(page, "_loaded", False):
             page.refresh()
+
+    def _releve_echoue(self, exc):
+        """Jeu injoignable : on retente, il peut etre relance d'ici la."""
+        self._reprogrammer_releve(jeu_absent=True)
+
+    def _reprogrammer_releve(self, jeu_absent=False):
+        self._tentatives_releve += 1
+        if self._tentatives_releve >= TENTATIVES_MAX:
+            self._releve_attendu = False
+            self.set_status("Relevé abandonné — le gain exact de la dernière "
+                            "course restera inconnu.", error=True)
+            return
+
+        if self._tentatives_releve < len(DELAIS_RELEVE):
+            delai = DELAIS_RELEVE[self._tentatives_releve]
+        else:
+            delai = PERIODE_RELEVE
+            # Une seule fois, au passage en cadence lente : repeter le message
+            # a chaque tentative noierait la barre d'etat.
+            if jeu_absent and self._tentatives_releve == len(DELAIS_RELEVE):
+                self.set_status("Relevé en attente — relance Le Mans Ultimate "
+                                "pour connaître le gain exact de ta course.")
+        self.after(delai, self._tenter_releve)
 
 
 def run():

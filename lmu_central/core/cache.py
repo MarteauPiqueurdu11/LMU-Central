@@ -103,6 +103,7 @@ HISTORIQUE_FILE = CACHE_DIR / HISTORIQUE_NOM
 SNAPSHOT_FILE = CACHE_DIR / "snapshot.json"
 COURSES_FILE = CACHE_DIR / "courses.json"
 CALENDRIER_FILE = CACHE_DIR / "calendrier.json"
+OCCURRENCES_FILE = CACHE_DIR / "occurrences.json"
 
 # Marge avant expiration : on ne reutilise pas un token qui expire dans l'instant.
 EXPIRY_MARGIN = datetime.timedelta(seconds=60)
@@ -150,11 +151,20 @@ def _read(path):
 # --- session ---
 
 def save_session(access_token, expires_at, player):
+    """Ecrit la session et renvoie la date de capture du profil.
+
+    Dater le profil est indispensable : il est resservi tel quel pendant les
+    30 minutes du jeton, et rien d'autre ne permettrait de dire que le rating
+    affiche est celui d'avant la derniere course.
+    """
+    fetched_at = _now().isoformat(timespec="seconds")
     _write(SESSION_FILE, {
         "accessToken": access_token,
         "expiresAt": expires_at,
+        "fetchedAt": fetched_at,
         "player": player,
     }, private=True)
+    return fetched_at
 
 
 def load_session():
@@ -238,3 +248,18 @@ def save_calendrier(donnees):
 
 def load_calendrier():
     return _read(CALENDRIER_FILE)
+
+
+def save_occurrences(occurrences):
+    """Remplace la memoire des epreuves vues avant leur depart.
+
+    Le backend retire une epreuve de ses listes des qu'elle est lancee : sans
+    cette memoire, son identifiant — et donc ses engages — serait perdu
+    justement pendant qu'elle roule. Voir `calendrier._memoriser`.
+    """
+    _write(OCCURRENCES_FILE, {"fetchedAt": _now().isoformat(timespec="seconds"),
+                              "occurrences": occurrences})
+
+
+def load_occurrences():
+    return (_read(OCCURRENCES_FILE) or {}).get("occurrences") or {}

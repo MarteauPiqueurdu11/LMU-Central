@@ -56,6 +56,13 @@ class RatingsModule(Module):
             ui.note(f"Jeu ferme et session expiree — dernieres valeurs connues, "
                     f"{ui.local_time(data.fetched_at)}.")
             ui.note("Relance Le Mans Ultimate pour rafraichir.")
+        elif data.profil_date:
+            # Amis et statistiques sont frais, le profil non : seul
+            # /authenticate donne le rating exact, et il exige le jeu.
+            ui.title("PROFIL DATE")
+            ui.note(f"Ton DR et ton SR datent de {ui.local_time(data.profil_date)} "
+                    f"— le jeu est ferme.")
+            ui.note("Relance Le Mans Ultimate pour la valeur d'apres ta course.")
 
         self._show_player(data.player, data.my_stats())
         if args.friends:

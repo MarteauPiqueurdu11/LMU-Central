@@ -87,7 +87,7 @@ class RatingsPage(Page):
         self.refresh_btn = ctk.CTkButton(head, text="Actualiser", width=110, height=32,
                                          font=self.f["body"], corner_radius=8,
                                          fg_color=theme.ACCENT, hover_color=theme.ACCENT_HI,
-                                         command=self.refresh)
+                                         command=lambda: self.refresh(force=True))
         self.refresh_btn.grid(row=0, column=1, sticky="e")
 
     def _construire_bas(self):
@@ -180,10 +180,21 @@ class RatingsPage(Page):
             self.stats_label.configure(
                 text=f"{races} courses · {wins} victoires ({taux:.1f} %)")
 
+        # Deux fraicheurs a distinguer : tout est hors ligne, ou bien les amis
+        # et les courses sont a jour mais le profil n'a pas pu etre relu —
+        # c'est le cas juste apres une course si le jeu a deja ete ferme.
         if data.offline:
             self.banner_label.configure(
                 text=f"Hors ligne — dernières valeurs connues, {local_time(data.fetched_at)}.\n"
                      "Relance Le Mans Ultimate puis Actualiser pour des valeurs fraîches.")
+            self.banner.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        elif data.profil_date:
+            self.banner_label.configure(
+                text=f"Ton DR et ton SR datent de {local_time(data.profil_date)} — "
+                     "le jeu est fermé : lui seul publie le rating exact.\n"
+                     "Les amis et les courses ci-dessous, eux, sont à jour. Relance "
+                     "Le Mans Ultimate puis Actualiser pour connaître le gain "
+                     "exact de ta dernière course.")
             self.banner.grid(row=1, column=0, sticky="ew", pady=(0, 12))
         else:
             self.banner.grid_forget()
