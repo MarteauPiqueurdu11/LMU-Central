@@ -5,6 +5,7 @@ import tkinter
 
 import customtkinter as ctk
 
+from .. import __version__
 from ..core import historique
 from ..core.errors import HubError
 from ..modules.base import Context
@@ -34,7 +35,7 @@ TENTATIVES_MAX = 24  # environ deux heures
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title(APP_NAME)
+        self.title(f"{APP_NAME} {__version__}")
         self._appliquer_icone()
         self.geometry("1120x860")
         # Plancher volontairement bas : chaque page se replie au lieu de se

@@ -8,10 +8,18 @@
 # toute seule chez ceux qui le telechargent (voir docs/notes-techniques.md).
 sauvegardes/
 
-# Produits de compilation
+# Produits de compilation. L'executable est a la racine depuis la 1.0.2 : il
+# pese 35 Mo, il se reconstruit d'un `py -3 build.py`, et c'est la Release
+# GitHub qui le distribue.
 build/
 dist/
 *.spec
+/LMU Central.exe
+/LMU-Central-v*.zip
+
+# Donnees de l'application portable, ecrites a cote de l'executable : session,
+# historique des ratings, configuration des molettes. Propres a une machine.
+/donnees/
 
 # Python
 __pycache__/

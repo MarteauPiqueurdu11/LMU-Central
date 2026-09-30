@@ -18,9 +18,14 @@ import shutil
 import sys
 from pathlib import Path
 
-# Noms portes par l'application avant celui-ci. Le cache les suit : sinon un
-# renommage ferait perdre la configuration des molettes et l'historique des
-# ratings — qui, lui, ne se reconstitue pas.
+# L'application est portable : tout ce qu'elle retient vit dans ce
+# sous-dossier, pose a cote de l'executable. Le dossier entier se deplace, se
+# copie et se sauvegarde d'un bloc.
+DOSSIER_DONNEES = "donnees"
+
+# Emplacements anterieurs, dans le profil utilisateur. Ils sont repris au
+# demarrage : sinon un changement d'emplacement ferait perdre la configuration
+# des molettes et l'historique des ratings — qui, lui, ne se reconstitue pas.
 DOSSIER = "LMU Central"
 ANCIENS_DOSSIERS = ("LMU Hub",)
 
@@ -50,51 +55,91 @@ def _fusionner_historique(source, cible):
                      encoding="utf-8")
 
 
-def _recuperer_ancien_cache(base, dossier):
-    """Reprend le cache laisse par une version portant un autre nom.
+def _reprendre(source, dossier):
+    """Verse un ancien dossier de donnees dans le nouveau, puis l'ecarte.
 
     On fusionne au lieu de renommer : les deux dossiers peuvent coexister si
-    l'application a tourne sous les deux noms, et c'est justement le cas ou un
-    simple renommage abandonnerait les relevés les plus recents.
+    l'application a tourne sous les deux emplacements, et c'est justement le
+    cas ou un simple renommage abandonnerait les relevés les plus recents.
     """
-    for ancien in ANCIENS_DOSSIERS:
-        source = base / ancien
-        if not source.is_dir():
+    if not source.is_dir():
+        return
+    try:
+        if source.resolve() == dossier.resolve():
+            return  # c'est deja le dossier courant : rien a reprendre
+    except OSError:
+        return
+
+    dossier.mkdir(parents=True, exist_ok=True)
+    for fichier in source.iterdir():
+        if not fichier.is_file():
             continue
-
-        dossier.mkdir(parents=True, exist_ok=True)
-        for fichier in source.iterdir():
-            if not fichier.is_file():
-                continue
-            arrivee = dossier / fichier.name
-            try:
-                if fichier.name == HISTORIQUE_NOM and arrivee.exists():
-                    _fusionner_historique(fichier, arrivee)
-                elif not arrivee.exists() or \
-                        fichier.stat().st_mtime > arrivee.stat().st_mtime:
-                    shutil.copy2(fichier, arrivee)
-            except OSError:
-                pass  # un fichier illisible ne doit pas empecher le demarrage
-
+        arrivee = dossier / fichier.name
         try:
-            source.rename(base / (ancien + SUFFIXE_REPRIS))
+            if fichier.name == HISTORIQUE_NOM and arrivee.exists():
+                _fusionner_historique(fichier, arrivee)
+            elif not arrivee.exists() or \
+                    fichier.stat().st_mtime > arrivee.stat().st_mtime:
+                shutil.copy2(fichier, arrivee)
         except OSError:
-            pass  # dossier verrouille : la fusion se refera au prochain coup
+            pass  # un fichier illisible ne doit pas empecher le demarrage
+
+    try:
+        source.rename(source.with_name(source.name + SUFFIXE_REPRIS))
+    except OSError:
+        pass  # dossier verrouille : la fusion se refera au prochain coup
+
+
+def _anciens_emplacements():
+    """Les dossiers de donnees qu'ont pu ecrire les versions precedentes."""
+    base = Path(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"))
+    return [base / nom for nom in (DOSSIER,) + ANCIENS_DOSSIERS]
+
+
+def _inscriptible(dossier):
+    """Vrai si l'on peut reellement ecrire dans ce dossier.
+
+    `Program Files` refuse l'ecriture aux comptes ordinaires, et le refus
+    n'arriverait qu'a la premiere sauvegarde — longtemps apres le demarrage,
+    quand l'utilisateur croit son reglage enregistre. On tranche des le debut.
+    """
+    try:
+        dossier.mkdir(parents=True, exist_ok=True)
+        temoin = dossier / ".ecriture"
+        temoin.write_text("", encoding="utf-8")
+        temoin.unlink()
+        return True
+    except OSError:
+        return False
 
 
 def _cache_dir():
-    """Emplacement du cache.
+    """Emplacement des donnees.
 
-    En .exe, `__file__` pointe vers un dossier temporaire efface a chaque
-    lancement : on ecrit alors dans le profil utilisateur pour que la session
-    et l'instantane survivent d'une execution a l'autre.
+    L'application est portable : en .exe, tout ce qu'elle retient vit a cote
+    de l'executable. L'utilisateur pose le dossier ou il veut, le deplace avec
+    ses reglages et son historique dedans, et sauvegarder le dossier sauvegarde
+    tout.
+
+    Ce choix regle au passage la perte de configuration apres une elevation en
+    administrateur : le dossier ne depend pas du compte Windows qui lance le
+    programme, la ou `%LOCALAPPDATA%` en depend entierement.
+
+    Repli sur le profil utilisateur si ce dossier n'est pas inscriptible —
+    typiquement un executable range dans `Program Files`.
     """
-    if getattr(sys, "frozen", False):
+    if not getattr(sys, "frozen", False):
+        return Path(__file__).resolve().parents[2] / ".cache"
+
+    dossier = Path(sys.executable).resolve().parent / DOSSIER_DONNEES
+    if not _inscriptible(dossier):
         base = Path(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"))
         dossier = base / DOSSIER
-        _recuperer_ancien_cache(base, dossier)
-        return dossier
-    return Path(__file__).resolve().parents[2] / ".cache"
+        dossier.mkdir(parents=True, exist_ok=True)
+
+    for ancien in _anciens_emplacements():
+        _reprendre(ancien, dossier)
+    return dossier
 
 
 CACHE_DIR = _cache_dir()

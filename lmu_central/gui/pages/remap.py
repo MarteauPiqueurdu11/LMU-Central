@@ -56,24 +56,24 @@ class RemapPage(Page):
         self._annoncer_origine()
 
     def _annoncer_origine(self):
-        """Dit d'ou viennent les reglages quand ce n'est pas l'endroit habituel.
+        """Explique des molettes vides, au lieu de les laisser passer pour une panne.
 
-        Des molettes vides, sans un mot, se lisent comme une perte de donnees ;
-        c'est en general que l'application tourne sous un autre profil Windows
-        et n'a pas trouve la configuration. Le silence est ici le vrai defaut.
+        Ce n'est desormais qu'un premier lancement : la configuration vit dans
+        le dossier de l'application et le suit partout, donc elle ne peut plus
+        disparaitre parce que Windows a change de profil.
         """
         from ...remap import config
 
-        origine = config.ancienne_origine
-        if origine is None:
+        if not config.premier_lancement:
             self.app.set_status("Macros prêtes")
-        elif origine:
-            self.app.set_status(f"Macros prêtes — réglages repris de {origine}")
-        else:
-            self._avertir(
-                "Aucune configuration trouvée : les molettes repartent des "
-                f"valeurs d'usine.\nElles seront enregistrées dans {config.DOSSIER}.")
-            self.app.set_status("Macros prêtes — configuration neuve", error=True)
+            return
+
+        self._avertir(
+            "Premier lancement : les molettes sont vides. Clique sur "
+            "« Détecter », puis actionne le bouton voulu sur ton volant pour "
+            f"le lui apprendre.\nTes réglages seront enregistrés dans "
+            f"{config.DOSSIER}, et suivront ce dossier si tu le déplaces.")
+        self.app.set_status("Macros prêtes — à configurer")
 
     def _avertir(self, message):
         if self.avertissement is None:

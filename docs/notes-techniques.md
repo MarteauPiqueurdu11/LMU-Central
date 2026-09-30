@@ -11,7 +11,7 @@ modules. Premier module livre : **DR / SR exacts**.
 ## Lancer
 
 ```
-dist/LMU Central.exe
+LMU Central.exe
 ```
 
 Executable autonome : ni Python ni dependance requis sur la machine.
@@ -29,7 +29,9 @@ py -3 hub.py      # version ligne de commande
 py -3 build.py
 ```
 
-Produit `dist/LMU Central.exe` (~35 Mo, demarrage ~1,4 s).
+Produit `LMU Central.exe` a la racine (~35 Mo, demarrage ~1,4 s) et
+`LMU-Central-vX.Y.Z.zip`, le dossier pret a partager : l'executable et un
+LISEZ-MOI, sous un dossier a son nom.
 
 > **Piege a connaitre** : modules et pages sont decouverts dynamiquement par
 > `pkgutil`. Aucun import statique ne les mentionne, donc PyInstaller ne les
@@ -52,7 +54,7 @@ Produit `dist/LMU Central.exe` (~35 Mo, demarrage ~1,4 s).
 ```
 app.py                     lance l'interface graphique
 hub.py                     lance la version ligne de commande
-build.py                   construit dist/LMU Central.exe
+build.py                   construit LMU Central.exe et son archive
 make_icon.py               genere assets/icon.ico
 lmu_central/
   core/                    logique metier, partagee par les deux interfaces
@@ -386,7 +388,7 @@ eleve, sans rien bloquer.
 ### Configuration
 
 Elle vit avec celle du hub : `.cache/remap-molettes.json` en developpement,
-`%LOCALAPPDATA%\LMU Central\` une fois empaquete.
+`donnees/remap-molettes.json` a cote de l'executable une fois empaquete.
 
 > L'application s'appelait auparavant **LMU Hub**. Au premier lancement sous le
 > nouveau nom, le cache de l'ancien dossier est **fusionne** dans le nouveau :
@@ -402,25 +404,40 @@ voulu : les molettes partent vides, et le bouton **Detecter** apprend les
 boutons de ce volant-la. Aucune configuration n'est livree avec le programme —
 voir plus bas pourquoi.
 
-### Le filet de securite
+### Pourquoi les donnees vivent a cote de l'executable
 
-`%LOCALAPPDATA%` **depend du compte Windows qui execute le programme**. Lance en
-administrateur sous un autre compte que le sien — ce que l'elevation demande
-quand le compte courant n'est pas administrateur — l'application cherche sa
-configuration dans un profil ou elle n'a jamais rien ecrit, n'y trouve rien, et
-repart des valeurs d'usine. Vu de l'ecran, tous les raccourcis ont disparu.
+Jusqu'a la 1.0.1, tout allait dans `%LOCALAPPDATA%\LMU Central\`. Or
+`%LOCALAPPDATA%` **depend du compte Windows qui execute le programme**. Lance
+en administrateur sous un autre compte que le sien — ce que l'elevation demande
+quand le compte courant n'est pas administrateur — l'application cherchait sa
+configuration dans un profil ou elle n'avait jamais rien ecrit, n'y trouvait
+rien, et repartait des valeurs d'usine. Vu de l'ecran, tous les raccourcis
+avaient disparu. Un filet de secours compensait, avec une copie entretenue a
+cote de l'executable.
 
-Une copie de secours existe pour ce cas. Elle est cherchee **a cote de
-l'executable**, et nulle part ailleurs :
+Depuis la 1.0.2, le filet n'a plus lieu d'etre : **les donnees sont la ou etait
+la copie**. `cache._cache_dir()` renvoie `<dossier de l'exe>/donnees`, un
+chemin qui ne depend d'aucun profil. Le probleme ne se pose plus, et une
+centaine de lignes de recuperation ont disparu avec lui.
 
-    <dossier de l'exe>/sauvegardes/  la copie entretenue (voir plus bas)
-    <dossier parent de l'exe>/       idem, pour un exe range dans dist/
+Ce que cela donne pour qui s'en sert :
 
-Ces deux emplacements ont une propriete essentielle : **c'est l'application
-qui les ecrit, sur la machine de celui qui s'en sert**. Ils ne peuvent donc
-contenir que ses reglages a lui. En developpement la liste est vide — la
-configuration vit dans `.cache/`, et il n'y a pas de second profil Windows
-dont il faudrait se proteger.
+- le dossier se pose ou l'on veut, et se deplace avec ses reglages dedans ;
+- sauvegarder le dossier sauvegarde tout ;
+- deux copies du dossier sont deux installations independantes.
+
+**Reprise de l'ancien emplacement.** Au premier demarrage de la 1.0.2, le
+contenu de `%LOCALAPPDATA%\LMU Central\` (et de `LMU Hub\`, nom encore
+anterieur) est verse dans le nouveau dossier, historiques fusionnes et
+dedoublonnes par date. L'ancien est ensuite renomme `... (repris)` : rien n'est
+supprime, et la fusion ne se rejoue pas a chaque lancement. Un releve perdu est
+un pourcentage de course perdu pour de bon, d'ou la prudence.
+
+**Repli.** Si le dossier de l'executable n'est pas inscriptible — un exe range
+dans `Program Files` —, on retombe sur le profil utilisateur. Le test est fait
+au demarrage, en ecrivant reellement un fichier temoin : le refus de Windows
+n'arriverait sinon qu'a la premiere sauvegarde, longtemps apres, quand
+l'utilisateur croit son reglage enregistre.
 
 **Ce qu'on ne fait pas : livrer une configuration avec le programme.** Ni
 embarquee dans le `.exe`, ni posee dans le depot, ni cherchee a un chemin que
@@ -431,34 +448,9 @@ embarquee : douze macros personnelles et les numeros de boutons d'un volant
 Fanatec precis, poses dans le profil d'un inconnu dont le volant n'a pas les
 memes — des molettes qui ont l'air reglees et qui ne font rien.
 
-La regle tient en une phrase : **le filet rattrape une configuration perdue,
-il n'en invente jamais une**. `build.py` n'embarque donc que `assets/`, et le
-depot ne contient aucun reglage.
-
-Corollaire pour la distribution : on envoie **`LMU Central.exe` seul**. Un
-dossier `sauvegardes/` pose a cote d'un exe est la copie de son proprietaire —
-le filet voulu chez lui, une fuite chez les autres.
-
-Deux garde-fous encadrent la reprise :
-
-- elle remplace aussi un fichier **deja ecrit avec les valeurs d'usine** — sinon
-  une seule session malheureuse figerait la perte sur le disque ;
-- elle ne touche **jamais** une configuration ou quoi que ce soit a ete regle,
-  meme si tous les raccourcis en ont ete effaces. Un fichier n'est repris que
-  s'il est identique, molette pour molette, a la sortie d'usine.
-
-Quand il ne reste vraiment rien, la page **le dit** au lieu de presenter des
-molettes vides : le silence se lit comme une panne.
-
-**La copie ne reste pas figee.** Une copie datant d'un jour precis ne sauve
-qu'une fois, et rendrait ensuite des raccourcis perimes. Chaque demarrage et
-chaque enregistrement en reecrivent donc une a cote de l'executable
-(`<dossier de l'exe>/sauvegardes/remap-config-origine.json`) — le seul endroit
-qui ne depende pas du compte Windows. Au demarrage aussi, sinon il n'y aurait
-aucun filet tant que l'utilisateur ne touche a rien. Une reserve : jamais avec
-les valeurs d'usine, qui effaceraient une copie valable. Si le dossier est en
-lecture seule — un exe range dans `Program Files` —, l'echec est silencieux,
-et l'utilisateur repart simplement des valeurs d'usine.
+Au premier lancement, les molettes sont donc vides, et la page **le dit** au
+lieu de les laisser passer pour une panne : elle renvoie vers le bouton
+*Detecter*, qui apprend les boutons de ce volant-la.
 
 ### Notes d'integration
 

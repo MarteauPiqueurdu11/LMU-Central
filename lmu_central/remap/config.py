@@ -12,101 +12,18 @@ automatiquement au format multi-molettes.
 import copy
 import json
 import os
-import sys
 
 # La configuration vit avec celle du hub : dossier .cache du projet en
-# developpement, profil utilisateur une fois empaquete en .exe.
+# developpement, dossier `donnees` a cote de l'executable une fois empaquete.
 from ..core.cache import CACHE_DIR
 
 DOSSIER = str(CACHE_DIR)
 FICHIER_CONFIG = os.path.join(DOSSIER, "remap-molettes.json")
 
-NOM_SECOURS = "remap-config-origine.json"
-DOSSIER_SECOURS = "sauvegardes"
+# Vrai quand `charger` n'a trouve aucune configuration : c'est un premier
+# lancement, pas une perte. L'interface s'en sert pour le dire autrement.
+premier_lancement = False
 
-# Ou l'application est reprise en cas de configuration manquante. Sans ce
-# filet, elle repart des valeurs d'usine — et les molettes se retrouvent muettes
-# alors que les reglages existent, quelque part, sur la machine.
-ancienne_origine = None  # rempli par `charger` quand le filet a servi
-
-
-def _destinations_de_secours():
-    """Ou l'on **entretient** une copie de la configuration.
-
-    Uniquement a cote de l'executable : c'est le seul endroit qui ne depende
-    pas du compte Windows qui lance le programme. En developpement la liste est
-    vide — le dossier `sauvegardes/` du projet est une archive, pas un cache,
-    et rien n'a a le reecrire.
-    """
-    if not getattr(sys, "_MEIPASS", None):
-        return []
-    dossier = os.path.dirname(os.path.abspath(sys.executable))
-    return [os.path.join(dossier, DOSSIER_SECOURS, NOM_SECOURS)]
-
-
-def _entretenir_le_secours(config):
-    """Tient la copie a jour, pour qu'elle vaille autre chose qu'un souvenir.
-
-    Une copie figee le jour de la compilation ne sauve qu'une fois : au
-    prochain incident elle rendrait des raccourcis perimes. On la reecrit donc
-    a chaque enregistrement — jamais avec les valeurs d'usine, qui
-    effaceraient une copie valable.
-    """
-    if _est_vierge(config):
-        return
-    texte = json.dumps(config, indent=2, ensure_ascii=False)
-    for chemin in _destinations_de_secours():
-        try:
-            if os.path.exists(chemin):
-                with open(chemin, encoding="utf-8") as fichier:
-                    if fichier.read() == texte:
-                        continue
-            os.makedirs(os.path.dirname(chemin), exist_ok=True)
-            with open(chemin, "w", encoding="utf-8") as fichier:
-                fichier.write(texte)
-        except OSError:
-            continue  # dossier en lecture seule (Program Files) : tant pis
-
-
-def _emplacements_de_secours():
-    """Tous les endroits ou une configuration connue peut se trouver.
-
-    Du plus frais au plus ancien. Toutes appartiennent a l'utilisateur
-    courant : **aucune ne vient de l'interieur du programme**. Une copie
-    embarquee a la compilation serait celle de qui a compile, et elle
-    s'installerait toute seule au premier lancement chez n'importe qui
-    d'autre — macros etrangeres, numeros de boutons d'un autre volant. Le
-    filet doit rattraper une configuration perdue, jamais en inventer une.
-
-    Reste donc le dossier de l'executable : le seul endroit qui appartienne a
-    l'utilisateur et qui reste accessible quand l'application tourne sous un
-    autre profil Windows, par exemple apres une elevation en administrateur.
-    Cette copie-la, c'est l'application elle-meme qui l'ecrit, sur la machine
-    de celui qui s'en sert — elle ne peut donc contenir que ses reglages.
-
-    En developpement la liste est vide : la configuration vit dans `.cache/`,
-    et il n'y a pas de second profil Windows dont il faudrait se proteger.
-    """
-    chemins = []
-
-    if getattr(sys, "_MEIPASS", None):
-        pres_de_l_exe = os.path.dirname(os.path.abspath(sys.executable))
-        for dossier in (pres_de_l_exe, os.path.dirname(pres_de_l_exe)):
-            chemins.append(os.path.join(dossier, DOSSIER_SECOURS, NOM_SECOURS))
-            chemins.append(os.path.join(dossier, NOM_SECOURS))
-    return chemins
-
-
-def _recuperer_ancienne_config():
-    """Renvoie le contenu d'une configuration de secours, ou None."""
-    for chemin in _emplacements_de_secours():
-        if os.path.exists(chemin):
-            try:
-                with open(chemin, encoding="utf-8") as fichier:
-                    return json.load(fichier), chemin
-            except (OSError, ValueError):
-                continue
-    return None
 
 NB_POSITIONS = 12
 
@@ -222,27 +139,19 @@ def _completer_molettes(config):
 def charger():
     """Renvoie la configuration, en creant le fichier au besoin.
 
-    Au premier lancement sur une machine, il n'y a rien a reprendre : les
-    molettes partent vides et c'est le bouton « Detecter » qui apprend les
-    boutons de ce volant-la. Le filet de secours ne sert qu'a retrouver une
-    configuration **deja ecrite par cet utilisateur** et devenue invisible,
-    typiquement apres une elevation en administrateur.
+    Au premier lancement, les molettes partent vides et c'est le bouton
+    « Detecter » qui apprend les boutons de ce volant-la. Rien n'est repris
+    d'ailleurs : la configuration vit dans le dossier de l'application, donc
+    elle le suit quand on le deplace, et elle ne depend plus du compte Windows
+    qui lance le programme — ce contre quoi il fallait autrefois un filet.
     """
-    global ancienne_origine
-    ancienne_origine = None
+    global premier_lancement
+    premier_lancement = False
 
     if not os.path.exists(FICHIER_CONFIG):
-        ancienne = _recuperer_ancienne_config()
-        if ancienne:
-            charge, origine = ancienne
-            config = _completer_molettes(_fusionner(DEFAUTS, _migrer(charge)))
-            sauver(config)
-            ancienne_origine = origine
-            print(f"remap : configuration reprise de {origine}")
-            return config
-        # Plus rien nulle part : on repart de zero, mais l'interface doit le
-        # dire. Des molettes vides sans explication passent pour une panne.
-        ancienne_origine = ""
+        # Des molettes vides sans un mot se lisent comme une panne : on marque
+        # le premier lancement pour que l'interface explique quoi faire.
+        premier_lancement = True
         sauver(DEFAUTS)
         return copy.deepcopy(DEFAUTS)
 
@@ -253,34 +162,7 @@ def charger():
         # Fichier illisible ou corrompu : on repart des defauts sans ecraser.
         return copy.deepcopy(DEFAUTS)
 
-    config = _completer_molettes(_fusionner(DEFAUTS, _migrer(charge)))
-
-    # Un fichier qui ne contient que les valeurs d'usine n'apprend rien : il a
-    # ete ecrit par une session qui n'avait, elle non plus, rien trouve. Si une
-    # copie de secours existe, elle vaut mieux. On ne fait ce remplacement que
-    # dans ce cas precis, pour ne jamais ressusciter des reglages effaces
-    # volontairement.
-    if _est_vierge(config):
-        ancienne = _recuperer_ancienne_config()
-        if ancienne:
-            reprise = _completer_molettes(_fusionner(DEFAUTS, _migrer(ancienne[0])))
-            if not _est_vierge(reprise):
-                sauver(reprise)
-                ancienne_origine = ancienne[1]
-                print(f"remap : configuration d'usine remplacee par {ancienne[1]}")
-                return reprise
-
-    # Tout va bien : c'est le moment d'entretenir la copie de secours. Attendre
-    # une modification reviendrait a n'avoir aucun filet tant que l'utilisateur
-    # ne touche a rien — soit exactement quand il n'a rien a se reprocher.
-    _entretenir_le_secours(config)
-    return config
-
-
-def _est_vierge(config):
-    """Vrai si la configuration est exactement celle sortie d'usine."""
-    neuve = _completer_molettes(copy.deepcopy(DEFAUTS))
-    return config.get("molettes") == neuve["molettes"]
+    return _completer_molettes(_fusionner(DEFAUTS, _migrer(charge)))
 
 
 def sauver(config):
@@ -291,5 +173,4 @@ def sauver(config):
             json.dump(config, fichier, indent=2, ensure_ascii=False)
     except OSError:
         return False
-    _entretenir_le_secours(config)
     return True

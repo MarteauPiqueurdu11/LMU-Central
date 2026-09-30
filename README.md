@@ -6,15 +6,22 @@ une seule fenêtre, à côté du jeu.
 
 ## Installation
 
-1. Télécharge `LMU Central.exe` depuis la page **Releases**.
-2. Mets-le dans un dossier à lui (bureau, documents, peu importe).
-3. Double-clic.
+1. Télécharge l'archive depuis la page **[Releases](https://github.com/MarteauPiqueurdu11/LMU-Central/releases/latest)**.
+2. Décompresse-la où tu veux — Documents, bureau, une clé USB.
+3. Ouvre le dossier, double-clic sur `LMU Central.exe`.
 
 Rien à installer, rien à configurer. Le hub trouve Le Mans Ultimate tout seul,
 même s'il est sur un autre disque que Steam.
 
 > **Windows va râler au premier lancement.** L'exécutable n'est pas signé :
 > clique sur *Informations complémentaires* → *Exécuter quand même*.
+
+**Tes données restent dans le dossier.** L'application crée un sous-dossier
+`donnees` à côté d'elle : réglages de molettes, historique des ratings, caches.
+Déplace le dossier, tout te suit ; sauvegarde-le, tu as tout sauvegardé ; deux
+copies sont deux installations indépendantes. Évite seulement `Program Files`,
+où Windows interdit l'écriture — le hub retombe alors sur ton profil
+utilisateur.
 
 ## Les quatre onglets
 
@@ -50,6 +57,11 @@ reconstruit en relevant ta valeur avant et après chaque course. Tes courses
 d'avant n'auront donc que les chevrons du jeu. Laisse le hub ouvert pendant que
 tu joues, et le jeu tourner une minute de plus après ta dernière course : le
 rating exact ne peut être lu que par le jeu, une fois la course publiée.
+
+**Les molettes partent vides.** Aucune configuration n'est livrée avec le
+programme — celle de quelqu'un d'autre viserait des boutons que ton volant n'a
+pas. Dans l'onglet *Macros Volant*, clique sur *Détecter* puis actionne le
+bouton voulu : il l'apprend.
 
 **Tout est en lecture seule.** Le hub ne modifie jamais ton profil, tes
 résultats ni tes fichiers de jeu.
