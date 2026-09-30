@@ -22,8 +22,7 @@ même s'il est sur un autre disque que Steam.
 |---|---|
 | **Ratings** | Ton DR et ton SR au centième de pourcent — le jeu les arrondit à la dizaine. Les ratings de tes amis Steam, et l'historique de toutes tes courses avec le gain ou la perte exacte de chacune. |
 | **Calendrier** | Les épreuves à venir : quotidiennes, hebdomadaires, spéciales et championnats. Avec les amis déjà inscrits, et le compte à rebours avant chaque départ. |
-| **Setups** | Tes setups rangés par circuit, avec la valeur de chaque réglage, et la comparaison de deux setups côte à côte. |
-| **Macros Volant** | Transforme les molettes crantées du volant en raccourcis : une position = une frappe. Avec un overlay en jeu pour savoir où tu en es. |
+| **Setups** | Tes setups rangés par circuit, avec la valeur de chaque réglage, la comparaison de deux setups côte à côte, et un bouton pour retrouver le fichier dans son dossier. || **Macros Volant** | Transforme les molettes crantées du volant en raccourcis : une position = une frappe. Avec un overlay en jeu pour savoir où tu en es. |
 
 ## Faut-il que le jeu soit ouvert ?
 
@@ -48,8 +47,9 @@ Discord, OBS ou Voicemod, c'est inutile.
 **L'historique des ratings démarre au premier lancement.** Le pourcentage exact
 gagné ou perdu n'existe nulle part sur les serveurs du jeu : le hub le
 reconstruit en relevant ta valeur avant et après chaque course. Tes courses
-d'avant n'auront donc que les chevrons du jeu. Laisse simplement le hub ouvert
-pendant que tu joues.
+d'avant n'auront donc que les chevrons du jeu. Laisse le hub ouvert pendant que
+tu joues, et le jeu tourner une minute de plus après ta dernière course : le
+rating exact ne peut être lu que par le jeu, une fois la course publiée.
 
 **Tout est en lecture seule.** Le hub ne modifie jamais ton profil, tes
 résultats ni tes fichiers de jeu.

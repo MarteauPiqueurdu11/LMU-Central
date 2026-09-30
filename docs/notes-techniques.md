@@ -64,6 +64,7 @@ lmu_central/
     calendrier.py          epreuves a venir + amis inscrits
     setups.py              lecture et comparaison des fichiers .svm
     installation.py        ou le jeu est installe (bibliotheques Steam)
+    explorateur.py         montre un fichier dans l'Explorateur Windows
     historique.py          releves locaux : le pourcentage exact au fil du temps
     ratings.py             chargement des ratings + repli hors ligne
     timefmt.py             horodatages en heure locale
@@ -300,11 +301,20 @@ courses. Le hub s'en charge tant qu'il est ouvert :
 - `status` passe de disponible a `unavailable` quand on quitte une session :
   c'est la fin d'une course ;
 - un releve est alors tente a +45 s, +2 min et +5 min — le backend met un
-  instant a publier le nouveau rating — et s'arrete des qu'une valeur
-  differente apparait ;
+  instant a publier le nouveau rating — puis toutes les 5 min pendant deux
+  heures, et s'arrete des qu'une valeur differente apparait ;
 - la page Historique se rafraichit toute seule si elle est ouverte.
 
-Laisse simplement le hub ouvert pendant que tu joues.
+**Pourquoi les tentatives tardives.** Relever le rating passe par
+`/authenticate`, qui reclame un ticket Steam : seul le jeu **en cours
+d'execution** peut le fournir. Un joueur qui ferme LMU en sortant de sa course
+n'a donc rien de relevable, et s'arreter a +5 min perdrait le pourcentage de
+cette course pour de bon. Les tentatives lentes rattrapent le cas ou le jeu
+est relance plus tard : la valeur lue est toujours la bonne, seule sa date
+glisse. La barre d'etat le dit au lieu d'echouer en silence.
+
+Laisse le hub ouvert pendant que tu joues — et, apres ta derniere course,
+laisse le jeu tourner une minute de plus.
 
 **Consequence a assumer** : l'historique demarre au premier lancement du hub.
 Les courses anterieures n'affichent que les chevrons — leur pourcentage exact
@@ -330,6 +340,14 @@ l'authentification.
 
 Or `/authenticate` ne renvoie qu'une chose : le profil du **porteur du ticket
 Steam**. Et seul le jeu, lance sur le compte concerne, peut produire ce ticket.
+
+Deuxieme consequence, sur son propre profil cette fois : le profil rendu par
+`RaceOS.authenticate()` sans `force` est celui du dernier relevé, fige pour
+les 30 minutes du jeton. Une course disputee entre-temps ne s'y voit pas,
+alors que les amis, les statistiques et les courses, eux, sont relus a chaque
+appel. Le bouton *Actualiser* force donc une vraie reauthentification ; quand
+le jeu est ferme, elle echoue et la page affiche la date du profil plutot que
+de faire passer une valeur perimee pour fraiche.
 
 **Consequence** : obtenir le pourcentage exact de quelqu'un d'autre est
 impossible, quel que soit l'outil. Fournir un pseudo ou un SteamID ne change
@@ -379,10 +397,10 @@ Elle vit avec celle du hub : `.cache/remap-molettes.json` en developpement,
 > justement le cas ou un renommage abandonnerait les releves les plus recents,
 > et un releve perdu est un pourcentage de course perdu pour de bon.
 
-Au tout premier lancement, la configuration de l'application autonome
-(`<dossier de l application autonome>/config.json`) est **reprise automatiquement** :
-molettes, boutons, libelles et raccourcis sont conserves. L'ancien fichier
-n'est pas modifie — l'application d'origine continue de fonctionner.
+Au premier lancement sur une machine, il n'y a rien a reprendre et c'est
+voulu : les molettes partent vides, et le bouton **Detecter** apprend les
+boutons de ce volant-la. Aucune configuration n'est livree avec le programme —
+voir plus bas pourquoi.
 
 ### Le filet de securite
 
@@ -392,20 +410,34 @@ quand le compte courant n'est pas administrateur — l'application cherche sa
 configuration dans un profil ou elle n'a jamais rien ecrit, n'y trouve rien, et
 repart des valeurs d'usine. Vu de l'ecran, tous les raccourcis ont disparu.
 
-Une copie de secours existe pour ce cas (`sauvegardes/remap-config-origine.json`),
-mais elle etait **hors de portee du .exe** : `__file__` y designe le dossier
-temporaire ou PyInstaller deballe le programme, pas le dossier du projet. Le
-filet ne servait donc que pendant le developpement, c'est-a-dire jamais quand il
-aurait fallu.
-
-Elle est desormais **embarquee dans l'executable**, et cherchee dans cet ordre,
-du plus frais au plus ancien :
+Une copie de secours existe pour ce cas. Elle est cherchee **a cote de
+l'executable**, et nulle part ailleurs :
 
     <dossier de l'exe>/sauvegardes/  la copie entretenue (voir plus bas)
     <dossier parent de l'exe>/       idem, pour un exe range dans dist/
-    <exe deballe>/sauvegardes/       la copie embarquee, datee de la compilation
-    <projet>/sauvegardes/            en developpement
-    <dossier de l application autonome>/config.json
+
+Ces deux emplacements ont une propriete essentielle : **c'est l'application
+qui les ecrit, sur la machine de celui qui s'en sert**. Ils ne peuvent donc
+contenir que ses reglages a lui. En developpement la liste est vide — la
+configuration vit dans `.cache/`, et il n'y a pas de second profil Windows
+dont il faudrait se proteger.
+
+**Ce qu'on ne fait pas : livrer une configuration avec le programme.** Ni
+embarquee dans le `.exe`, ni posee dans le depot, ni cherchee a un chemin que
+le developpeur serait seul a connaitre. Une configuration livree est celle de
+qui a compile, et elle s'installe toute seule au premier lancement chez tout
+le monde. Mesure sur une machine vierge simulee, a l'epoque ou elle etait
+embarquee : douze macros personnelles et les numeros de boutons d'un volant
+Fanatec precis, poses dans le profil d'un inconnu dont le volant n'a pas les
+memes — des molettes qui ont l'air reglees et qui ne font rien.
+
+La regle tient en une phrase : **le filet rattrape une configuration perdue,
+il n'en invente jamais une**. `build.py` n'embarque donc que `assets/`, et le
+depot ne contient aucun reglage.
+
+Corollaire pour la distribution : on envoie **`LMU Central.exe` seul**. Un
+dossier `sauvegardes/` pose a cote d'un exe est la copie de son proprietaire —
+le filet voulu chez lui, une fuite chez les autres.
 
 Deux garde-fous encadrent la reprise :
 
@@ -418,16 +450,15 @@ Deux garde-fous encadrent la reprise :
 Quand il ne reste vraiment rien, la page **le dit** au lieu de presenter des
 molettes vides : le silence se lit comme une panne.
 
-**La copie ne reste pas figee.** Celle qui est embarquee date du jour de la
-compilation : elle ne sauve qu'une fois, et rendrait ensuite des raccourcis
-perimes. Chaque demarrage et chaque enregistrement en reecrivent donc une a
-cote de l'executable (`<dossier de l'exe>/sauvegardes/remap-config-origine.json`)
-— le seul endroit qui ne depende pas du compte Windows. Au demarrage aussi,
-sinon il n'y aurait aucun filet tant que l'utilisateur ne touche a rien. Deux reserves : jamais avec les valeurs
-d'usine, qui effaceraient une copie valable, et jamais dans `sauvegardes/` du
-projet, qui est une archive et non un cache. Si le dossier est en lecture seule
-— un exe range dans `Program Files` —, l'echec est silencieux : la copie
-embarquee reste la.
+**La copie ne reste pas figee.** Une copie datant d'un jour precis ne sauve
+qu'une fois, et rendrait ensuite des raccourcis perimes. Chaque demarrage et
+chaque enregistrement en reecrivent donc une a cote de l'executable
+(`<dossier de l'exe>/sauvegardes/remap-config-origine.json`) — le seul endroit
+qui ne depende pas du compte Windows. Au demarrage aussi, sinon il n'y aurait
+aucun filet tant que l'utilisateur ne touche a rien. Une reserve : jamais avec
+les valeurs d'usine, qui effaceraient une copie valable. Si le dossier est en
+lecture seule — un exe range dans `Program Files` —, l'echec est silencieux,
+et l'utilisateur repart simplement des valeurs d'usine.
 
 ### Notes d'integration
 
@@ -456,7 +487,7 @@ embarquee reste la.
 
 L'onglet montre les epreuves a venir et, pour chacune, les amis inscrits.
 
-### Les quatre appels, verifies contre le backend
+### Les cinq appels, verifies contre le backend
 
     GET  api/v1/daily/schedule
         La rotation de la semaine : trois niveaux (beginner, intermediate,
@@ -472,6 +503,9 @@ L'onglet montre les epreuves a venir et, pour chacune, les amis inscrits.
 
     POST api/v1/event/overview  {game, eventType, eventId}
         Le detail d'une occurrence : nombre d'inscrits, splits, et `friends`.
+
+    GET  api/v1/event/entries/{type}/{id}?page={p}&take={n}
+        Les engages, seule source des amis une fois l'epreuve lancee.
 
 ### Hebdomadaires et epreuves speciales
 
@@ -519,6 +553,42 @@ minute par minute et livrees — 10 Ko au lieu de plusieurs centaines.
 
 Le detail coute un aller-retour par epreuve : on le reserve aux huit
 prochaines, les seules ou l'inscription d'un ami a un interet.
+
+### Les amis en course
+
+Premiere version : un ami inscrit disparaissait de l'onglet **au moment meme
+ou il prenait la piste**. Mesure du 30 septembre 2026, sur une quotidienne
+intermediaire (sessions a 10:50, course a 11:03) :
+
+| Heure | `daily/list` | `event/overview` |
+|---|---|---|
+| 10:48 | listee, `ServersRunning` | `friends` servi |
+| 10:51 | **absente** | `Running`, `friends: []` — inscrits toujours donnes |
+
+Une epreuve quitte les listes des qu'elle passe en `Running`, c'est-a-dire aux
+essais, un quart d'heure avant le depart. Le hub perdait alors son identifiant
+et ne demandait plus rien. Les epreuves speciales font pire : l'occurrence
+lancee sort de `special-events`, et l'epreuve entiere quittait le calendrier —
+six heures durant pour les 6 Heures de Fuji.
+
+Le jeu lui-meme n'affiche les amis inscrits qu'avant le depart ; ensuite un
+drapeau a damier les remplace.
+
+La parade tient en deux morceaux :
+
+- **une memoire locale** (`occurrences.json` dans le cache) : chaque epreuve vue
+  avant son depart y est retenue, identifiant compris, jusqu'a sa fin. Une fois
+  lancee, on la retrouve la ; une speciale y est meme reconstruite entiere ;
+- **`GET api/v1/event/entries/{type}/{id}?page={p}&take={n}`**, trouvee dans le
+  bundle du jeu (`Bin/UI.zip`). Les engages y restent servis pendant la course,
+  avec nom et avatar Steam mais **sans identifiant de joueur**. On les croise
+  avec `friends-list` par l'empreinte de l'avatar (40 caracteres hexadecimaux,
+  la meme en `_medium` et `_full`), a defaut par le nom. Les equipiers
+  (`teamMembers`) comptent aussi. `page` commence a **1** : `page=0` renvoie la
+  meme chose que `page=1`, ce qui double silencieusement les engages.
+
+Limite assumee : une epreuve deja lancee au premier lancement du hub n'a jamais
+ete vue, et reste introuvable — aucune route ne liste les epreuves en cours.
 
 ### Pourquoi `daily/schedule` porte le calendrier
 
@@ -672,6 +742,27 @@ laquelle des deux valeurs appartient a quel fichier.
 **Tout est en lecture seule.** Le hub n'ecrit jamais dans les fichiers du jeu.
 « Copier » met le setup — ou la comparaison — dans le presse-papiers, en texte,
 pret a coller dans un message.
+
+« Voir dans le dossier » ouvre l'Explorateur avec le fichier du setup **deja
+selectionne** (`explorer /select,"<fichier>"`), plutot que le dossier d'un
+circuit et ses dizaines de fichiers. En comparaison, c'est le setup choisi
+dans la liste, pas l'epingle. Le hub ne fait que regarder : il n'ouvre pas le
+fichier et n'y touche pas.
+
+L'Explorateur ne signale aucune de ses erreurs, d'ou deux precautions dans
+`core/explorateur.py` :
+
+- le chemin est ramene a des antislashs, la seule forme que `/select` attend ;
+- on verifie que le fichier existe. Sinon l'Explorateur ne rouvre pas son
+  dossier : il ouvre le **Bureau avec « Documents » surligne**, comme si tout
+  s'etait bien passe (constate sous Windows 11). Un setup supprime entre la
+  lecture et le clic tomberait dans ce piege ; la barre d'etat dit
+  maintenant qu'il n'existe plus.
+
+Ce bouton a aussi fait descendre la note « epingle : … » sous la barre : a
+quatre boutons elle ne tenait plus a leur suite, meme a la taille par defaut
+(589 px demandes pour 566 offerts). Le debordement existait deja a 720 px
+avec un setup epingle, sans que rien ne le mesure.
 
 ## Fenetre redimensionnable
 
