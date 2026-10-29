@@ -2,4 +2,4 @@
 
 # Source unique de la version : `build.py` la lit pour nommer l'archive, et la
 # fenetre l'affiche dans son titre. Une Release GitHub porte le meme numero.
-__version__ = "1.0.2"
+__version__ = "1.1.0"
