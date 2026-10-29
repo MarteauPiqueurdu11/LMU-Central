@@ -52,7 +52,7 @@ RETRAIT_GROUPE = 14
 # Largeurs souhaitees dans le panneau de droite, rognees quand la fenetre
 # ne les offre pas : un tableau qui deborde sort de la fenetre sans le
 # moindre avertissement, et CTkScrollableFrame ne le retient pas.
-LARGEUR_LIBELLE = 208
+LARGEUR_LIBELLE = 236
 LARGEUR_LIBELLE_MIN = 108
 LARGEUR_VALEUR = 108
 LARGEUR_VALEUR_SEULE = 240
@@ -602,8 +602,11 @@ class SetupsPage(Page):
         setup = self.choisi
         self._entete_setup(setup)
 
-        rang = 0
-        for titre, colonnes, lignes in setup.groupes():
+        rang, onglet_courant = 0, None
+        for onglet, titre, colonnes, lignes in setup.groupes():
+            if onglet != onglet_courant:
+                rang = self._onglet(rang, onglet)
+                onglet_courant = onglet
             rang = self._bloc(rang, titre, colonnes, lignes)
         if rang == 0:
             self._vider(self.detail, "Ce fichier ne contient aucun réglage lisible.")
@@ -721,6 +724,13 @@ class SetupsPage(Page):
                 valeur = max(LARGEUR_VALEUR_MIN, (dispo - libelle) // nombre)
         return libelle, valeur
 
+    def _onglet(self, rang, nom):
+        """Le nom d'un onglet du garage, au-dessus de ses sections."""
+        ctk.CTkLabel(self.detail, text=nom.upper(), font=self.f["heading"],
+                     text_color=theme.ACCENT, anchor="w").grid(
+            row=rang, column=0, sticky="ew", padx=12, pady=(22 if rang else 8, 0))
+        return rang + 1
+
     def _bloc(self, rang, titre, colonnes, lignes):
         ctk.CTkLabel(self.detail, text=titre.upper(), font=self.f["heading"],
                      text_color=theme.TEXT_FAINT, anchor="w").grid(
@@ -757,8 +767,10 @@ class SetupsPage(Page):
             # toutes les deux.
             etendue = nombre if len(ligne.valeurs) == 1 else 1
             for index, valeur in enumerate(ligne.valeurs):
-                ctk.CTkLabel(tableau, text=tronquer(valeur or st.ABSENT,
-                                                    largeur * etendue),
+                # None : une case sans objet, comme la hauteur de caisse sous
+                # le 3e ressort. Le jeu la laisse vide, on fait de meme.
+                texte = "" if valeur is None else (valeur or st.ABSENT)
+                ctk.CTkLabel(tableau, text=tronquer(texte, largeur * etendue),
                              font=self.f["small"], text_color=theme.TEXT,
                              anchor="w").grid(row=interne, column=index + 1,
                                               columnspan=etendue, sticky="ew",
@@ -806,11 +818,14 @@ class SetupsPage(Page):
 
         self._boutons_detail(rang=4)
 
-        rang = 0
-        for titre, ecarts in blocs:
+        rang, onglet_courant = 0, None
+        for onglet, titre, ecarts in blocs:
             chauds = [e for e in ecarts if e.different]
             if not chauds:
                 continue
+            if onglet != onglet_courant:
+                rang = self._onglet(rang, onglet)
+                onglet_courant = onglet
             rang = self._bloc_ecarts(rang, titre, chauds)
 
         if rang == 0:
@@ -850,14 +865,18 @@ class SetupsPage(Page):
         total, differents = st.resumer(blocs)
         lignes = [f"{gauche.nom}", f"{droite.nom}",
                   f"{differents} différence(s) sur {total} réglages comparés"]
-        for titre, ecarts in blocs:
+        onglet_courant = None
+        for onglet, titre, ecarts in blocs:
             chauds = [e for e in ecarts if e.different]
             if not chauds:
                 continue
+            if onglet != onglet_courant:
+                lignes += ["", f"=== {onglet.upper()} ==="]
+                onglet_courant = onglet
             lignes.append("")
             lignes.append(titre.upper())
             for ecart in chauds:
-                lignes.append(f"  {ecart.libelle:<34}{ecart.gauche:<20}"
+                lignes.append(f"  {ecart.libelle:<44}{ecart.gauche:<20}"
                               f"→ {ecart.droite}")
         # Meme fin de ligne que `exporter` : le presse-papiers finit
         # souvent dans un editeur Windows, qui attend du CRLF.

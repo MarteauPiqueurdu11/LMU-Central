@@ -199,21 +199,29 @@ def _sans_accents(texte):
 
 # --- disposition des valeurs ----------------------------------------------
 #
-# L'ordre suit les onglets du garage du jeu, et dans chaque onglet l'ordre de
-# ses lignes : ce qu'on regle en premier vient en premier. L'onglet Basique
-# n'est pas repris, il ne fait que redire les autres.
+# Calquee sur le garage du jeu en francais : memes onglets, memes sections,
+# memes libelles, dans le meme ordre. L'onglet Basique n'est pas repris, il ne
+# fait que redire les autres. Les reglages qu'aucune voiture du corpus n'expose
+# — donc absents des captures du garage — gardent un libelle descriptif et
+# leur place la plus probable.
 #
-# Un groupe vaut `(titre, entrees)`, une entree `(sources, libelle)`. Les
-# sources sont soit `((section, cle),)` pour une valeur seule, soit
-# `((section_g, cle_g), (section_d, cle_d))` pour un reglage cote gauche et
-# cote droit.
+# `DISPOSITION` vaut `((onglet, groupes), ...)`, un groupe `(titre, entrees)`,
+# une entree `(sources, libelle)`. Les sources sont :
 #
-# Une cle absente de cette table reste affichee, dans un groupe « Autres
-# reglages » : une nouvelle voiture ne doit rien faire disparaitre.
+#   ((section, cle),)                         une valeur seule
+#   ((section_g, cle_g), (section_d, cle_d))  gauche et droite
+#   (gauche, troisieme_element, droite)       les deux roues et le 3e ressort,
+#                                             dans l'ordre des colonnes du jeu
+#
+# Une cle absente de cette table reste affichee, dans « Autres reglages » :
+# une nouvelle voiture ne doit rien faire disparaitre.
 
 AVANT = ("FRONTLEFT", "FRONTRIGHT")
 ARRIERE = ("REARLEFT", "REARRIGHT")
-COTES = ("GAUCHE", "DROITE")
+
+GAUCHE, TROISIEME, DROITE = "À GAUCHE", "3E RESSORT", "DROITE"
+# Gauche et droite repliees en une colonne, a cote du 3e ressort.
+ROUES = "ROUES"
 
 
 def _seul(section, cle, libelle):
@@ -229,7 +237,14 @@ def _paire(gauche, droite, libelle):
     return ((("SUSPENSION", gauche), ("SUSPENSION", droite)), libelle)
 
 
-def _pneus(essieu):
+def _trio(essieu, prefixe, cle, libelle):
+    """Les deux roues d'un essieu et son troisieme element, comme au garage."""
+    return (((essieu[0], f"{cle}Setting"),
+             ("SUSPENSION", f"{prefixe}3rd{cle}Setting"),
+             (essieu[1], f"{cle}Setting")), libelle)
+
+
+def _roues(essieu):
     return (
         _roue(essieu, "CompoundSetting", "Gomme"),
         _roue(essieu, "PressureSetting", "Pression des pneus"),
@@ -241,134 +256,142 @@ def _pneus(essieu):
 
 def _suspension(essieu, prefixe):
     return (
+        _trio(essieu, prefixe, "Spring", "Compression de ressort"),
+        _trio(essieu, prefixe, "TenderSpring", "Compression de ressort faible"),
+        _trio(essieu, prefixe, "TenderTravel", "Course de ressort faible"),
+        _trio(essieu, prefixe, "Packer", "Cales de réglage"),
         _roue(essieu, "RideHeightSetting", "Hauteur de caisse"),
-        _roue(essieu, "SpringSetting", "Ressort"),
-        _roue(essieu, "TenderSpringSetting", "Ressort auxiliaire"),
-        _roue(essieu, "TenderTravelSetting", "Course auxiliaire"),
-        _roue(essieu, "PackerSetting", "Butée"),
-        _roue(essieu, "SpringRubberSetting", "Cale de ressort"),
-        _seul("SUSPENSION", f"{prefixe}3rdSpringSetting", "3e élément — ressort"),
-        _seul("SUSPENSION", f"{prefixe}3rdTenderSpringSetting",
-              "3e élément — ressort auxiliaire"),
-        _seul("SUSPENSION", f"{prefixe}3rdTenderTravelSetting",
-              "3e élément — course auxiliaire"),
-        _seul("SUSPENSION", f"{prefixe}3rdPackerSetting", "3e élément — butée"),
+        _roue(essieu, "SpringRubberSetting", "Cales de ressort"),
     )
-
-
-AMORTISSEURS = (("SlowBump", "compression lente"), ("FastBump", "compression rapide"),
-                ("SlowRebound", "détente lente"), ("FastRebound", "détente rapide"))
 
 
 def _amortisseurs(essieu, prefixe):
     return (
-        tuple(_roue(essieu, f"{cle}Setting", libelle.capitalize())
-              for cle, libelle in AMORTISSEURS)
-        + tuple(_seul("SUSPENSION", f"{prefixe}3rd{cle}Setting",
-                      f"3e élément — {libelle}")
-                for cle, libelle in AMORTISSEURS)
+        _trio(essieu, prefixe, "SlowBump", "Amortissement lent"),
+        _trio(essieu, prefixe, "SlowRebound", "Rebond lent"),
+        _trio(essieu, prefixe, "FastBump", "Amortissement rapide"),
+        _trio(essieu, prefixe, "FastRebound", "Rebond rapide"),
     )
 
 
 RAPPORTS = ("1er", "2e", "3e", "4e", "5e", "6e", "7e")
 
 DISPOSITION = (
-    ("Moteur", (
-        _seul("GENERAL", "VirtualEnergySetting", "Énergie virtuelle"),
-        _seul("GENERAL", "FuelSetting", "Ratio de carburant"),
-        _seul("GENERAL", "FuelCapacitySetting", "Carburant embarqué"),
-        _seul("ENGINE", "RevLimitSetting", "Limiteur de régime"),
-        _seul("ENGINE", "EngineMixtureSetting", "Mélange moteur"),
-        _seul("ENGINE", "EngineBoostSetting", "Suralimentation"),
-        _seul("ENGINE", "EngineBrakingMapSetting", "Frein moteur"),
-        _seul("BODYAERO", "WaterRadiatorSetting", "Cache radiateur d'eau"),
-        _seul("BODYAERO", "OilRadiatorSetting", "Cache radiateur d'huile"),
+    ("Groupe motopropulseur", (
+        ("Moteur", (
+            _seul("GENERAL", "VirtualEnergySetting", "Énergie virtuelle"),
+            _seul("GENERAL", "FuelSetting", "Capacité en carburant"),
+            _seul("GENERAL", "FuelCapacitySetting", "Carburant embarqué"),
+            _seul("ENGINE", "RevLimitSetting", "Limiteur de régime"),
+            _seul("ENGINE", "EngineMixtureSetting", "Mélange moteur"),
+            _seul("ENGINE", "EngineBoostSetting", "Suralimentation"),
+            _seul("ENGINE", "EngineBrakingMapSetting", "Frein moteur"),
+            _seul("BODYAERO", "WaterRadiatorSetting", "Fermeture du radiateur d'eau"),
+            _seul("BODYAERO", "OilRadiatorSetting", "Fermeture du radiateur d'huile"),
+        )),
+        ("Électronique", (
+            _seul("CONTROLS", "TCSetting", "Antipatinage"),
+            _seul("CONTROLS", "TractionControlMapSetting", "TC à bord"),
+            _seul("CONTROLS", "TCPowerCutMapSetting", "TC Power cut"),
+            _seul("CONTROLS", "TCSlipAngleMapSetting", "TC Slip Angle"),
+            _seul("ENGINE", "RegenerationMapSetting", "Niveau de recharge"),
+            _seul("ENGINE", "ElectricMotorMapSetting", "Cartographie moteur électrique"),
+        )),
+        ("Différentiel", (
+            _seul("DRIVELINE", "DiffPowerSetting", "Puissance"),
+            _seul("DRIVELINE", "DiffCoastSetting", "Coast"),
+            _seul("DRIVELINE", "DiffPreloadSetting", "Précharge"),
+            _seul("DRIVELINE", "DiffPumpSetting", "Pompe"),
+            _seul("DRIVELINE", "FrontDiffPowerSetting", "Puissance avant"),
+            _seul("DRIVELINE", "FrontDiffCoastSetting", "Coast avant"),
+            _seul("DRIVELINE", "FrontDiffPreloadSetting", "Précharge avant"),
+            _seul("DRIVELINE", "FrontDiffPumpSetting", "Pompe avant"),
+            _seul("DRIVELINE", "RearSplitSetting", "Répartition du couple"),
+        )),
+        ("Passage de rapport", (
+            _seul("DRIVELINE", "RatioSetSetting", "Plage de rapports"),
+            _seul("DRIVELINE", "FinalDriveSetting", "Rapport final"),
+            *(_seul("DRIVELINE", f"Gear{n}Setting", f"{nom} rapport")
+              for n, nom in enumerate(RAPPORTS, start=1)),
+            _seul("DRIVELINE", "ReverseSetting", "Marche arrière"),
+            _seul("DRIVELINE", "GearAutoUpShiftSetting", "Montée automatique"),
+            _seul("DRIVELINE", "GearAutoDownShiftSetting", "Rétrogradage automatique"),
+        )),
     )),
-    ("Électronique", (
-        _seul("CONTROLS", "TCSetting", "Antipatinage"),
-        _seul("CONTROLS", "TractionControlMapSetting", "Antipatinage embarqué"),
-        _seul("CONTROLS", "TCPowerCutMapSetting", "Coupure de puissance TC"),
-        _seul("CONTROLS", "TCSlipAngleMapSetting", "Angle de glisse TC"),
-        _seul("ENGINE", "RegenerationMapSetting", "Niveau de récupération"),
-        _seul("ENGINE", "ElectricMotorMapSetting", "Cartographie moteur électrique"),
+    ("Roues et freins", (
+        ("Roues avant", _roues(AVANT)),
+        ("Roues arrière", _roues(ARRIERE)),
+        ("Freins", (
+            _seul("CONTROLS", "RearBrakeSetting", "Répartition des freins"),
+            _seul("CONTROLS", "BrakeMigrationSetting", "Migration des freins"),
+            _seul("CONTROLS", "BrakePressureSetting", "Résistance pédale max"),
+            _seul("BODYAERO", "BrakeDuctSetting", "Refroidissement des freins avant"),
+            _seul("BODYAERO", "BrakeDuctRearSetting", "Refroidissement des freins arrière"),
+            _seul("CONTROLS", "ABSSetting", "ABS"),
+            _seul("CONTROLS", "AntilockBrakeSystemMapSetting", "Cartographie ABS"),
+            _seul("CONTROLS", "HandfrontbrakePressSetting", "Frein à main avant"),
+            _seul("CONTROLS", "HandbrakePressSetting", "Frein à main"),
+        )),
     )),
-    ("Différentiel", (
-        _seul("DRIVELINE", "DiffPowerSetting", "Accélération"),
-        _seul("DRIVELINE", "DiffCoastSetting", "Décélération"),
-        _seul("DRIVELINE", "DiffPreloadSetting", "Précharge"),
-        _seul("DRIVELINE", "DiffPumpSetting", "Pompe"),
-        _seul("DRIVELINE", "FrontDiffPowerSetting", "Accélération avant"),
-        _seul("DRIVELINE", "FrontDiffCoastSetting", "Décélération avant"),
-        _seul("DRIVELINE", "FrontDiffPreloadSetting", "Précharge avant"),
-        _seul("DRIVELINE", "FrontDiffPumpSetting", "Pompe avant"),
-        _seul("DRIVELINE", "RearSplitSetting", "Répartition du couple"),
+    ("Suspension", (
+        ("Suspension avant", _suspension(AVANT, "Front")),
+        ("Suspension arrière", _suspension(ARRIERE, "Rear")),
     )),
-    ("Rapports", (
-        _seul("DRIVELINE", "RatioSetSetting", "Jeu de rapports"),
-        _seul("DRIVELINE", "FinalDriveSetting", "Rapport final"),
-        *(_seul("DRIVELINE", f"Gear{n}Setting", f"{nom} rapport")
-          for n, nom in enumerate(RAPPORTS, start=1)),
-        _seul("DRIVELINE", "ReverseSetting", "Marche arrière"),
-        _seul("DRIVELINE", "GearAutoUpShiftSetting", "Montée automatique"),
-        _seul("DRIVELINE", "GearAutoDownShiftSetting", "Rétrogradage automatique"),
+    # Le jeu reprend ici les titres de l'onglet Suspension.
+    ("Amortisseurs", (
+        ("Suspension avant", _amortisseurs(AVANT, "Front")),
+        ("Suspension arrière", _amortisseurs(ARRIERE, "Rear")),
     )),
-    ("Roues avant", _pneus(AVANT)),
-    ("Roues arrière", _pneus(ARRIERE)),
-    ("Freins", (
-        _seul("CONTROLS", "RearBrakeSetting", "Répartition de freinage"),
-        _seul("CONTROLS", "BrakeMigrationSetting", "Migration de freinage"),
-        _seul("CONTROLS", "BrakePressureSetting", "Force max. sur la pédale"),
-        _seul("BODYAERO", "BrakeDuctSetting", "Obturation écope de frein avant"),
-        _seul("BODYAERO", "BrakeDuctRearSetting", "Obturation écope de frein arrière"),
-        _seul("CONTROLS", "ABSSetting", "ABS"),
-        _seul("CONTROLS", "AntilockBrakeSystemMapSetting", "Cartographie ABS"),
-        _seul("CONTROLS", "HandfrontbrakePressSetting", "Frein à main avant"),
-        _seul("CONTROLS", "HandbrakePressSetting", "Frein à main"),
+    ("Châssis et aérodynamisme", (
+        ("Châssis avant", (
+            _paire("LeftCasterSetting", "RightCasterSetting", "Angle de chasse"),
+            _seul("SUSPENSION", "FrontToeInSetting", "Pincement"),
+            _seul("SUSPENSION", "FrontToeOffsetSetting", "Décalage de pincement"),
+            _seul("SUSPENSION", "FrontAntiSwaySetting", "Barre antiroulis"),
+            _seul("SUSPENSION", "FrontWheelTrackSetting", "Roulement avant"),
+            _seul("CONTROLS", "SteerLockSetting", "Limite du volant (blocage)"),
+            _seul("FRONTWING", "FWSetting", "Diffuseur avant"),
+            _paire("LeftTrackBarSetting", "RightTrackBarSetting", "Barre Panhard"),
+            ((("LEFTFENDER", "FenderFlareSetting"), ("RIGHTFENDER", "FenderFlareSetting")),
+             "Élargisseur d'aile"),
+        )),
+        ("Châssis arrière", (
+            _seul("SUSPENSION", "RearToeInSetting", "Pincement"),
+            _seul("SUSPENSION", "RearToeOffsetSetting", "Décalage de pincement"),
+            _seul("SUSPENSION", "RearAntiSwaySetting", "Barre antiroulis"),
+            _seul("SUSPENSION", "RearWheelTrackSetting", "Roulement arrière"),
+            _seul("REARWING", "RWSetting", "Aileron arrière"),
+        )),
+        ("Poids", (
+            _seul("GENERAL", "CGHeightSetting", "Verticale"),
+            _seul("GENERAL", "CGRightSetting", "Latérale"),
+            _seul("GENERAL", "CGRearSetting", "Répartition du poids"),
+            _seul("GENERAL", "WedgeSetting", "Biais de suspension"),
+        )),
+        ("Châssis avancé", tuple(
+            _seul("SUSPENSION", f"ChassisAdj{n:02d}Setting", f"Ajustement du châssis {n}")
+            for n in range(12))),
     )),
-    ("Suspension avant", _suspension(AVANT, "Front")),
-    ("Suspension arrière", _suspension(ARRIERE, "Rear") + (
-        _seul("GENERAL", "WedgeSetting", "Biais de suspension"),
-    )),
-    ("Amortisseurs avant", _amortisseurs(AVANT, "Front")),
-    ("Amortisseurs arrière", _amortisseurs(ARRIERE, "Rear")),
-    ("Châssis avant", (
-        _paire("LeftCasterSetting", "RightCasterSetting", "Chasse"),
-        _seul("SUSPENSION", "FrontToeInSetting", "Pincement"),
-        _seul("SUSPENSION", "FrontToeOffsetSetting", "Décalage de pincement"),
-        _seul("SUSPENSION", "FrontAntiSwaySetting", "Barre antiroulis"),
-        _seul("SUSPENSION", "FrontWheelTrackSetting", "Voie avant"),
-        _seul("CONTROLS", "SteerLockSetting", "Amplitude du volant (braquage)"),
-        _paire("LeftTrackBarSetting", "RightTrackBarSetting", "Barre Panhard"),
-    )),
-    ("Châssis arrière", (
-        _seul("SUSPENSION", "RearToeInSetting", "Pincement"),
-        _seul("SUSPENSION", "RearToeOffsetSetting", "Décalage de pincement"),
-        _seul("SUSPENSION", "RearAntiSwaySetting", "Barre antiroulis"),
-        _seul("SUSPENSION", "RearWheelTrackSetting", "Voie arrière"),
-    )),
-    ("Aéro", (
-        _seul("REARWING", "RWSetting", "Aileron arrière"),
-        _seul("FRONTWING", "FWSetting", "Aileron avant"),
-        _seul("LEFTFENDER", "FenderFlareSetting", "Élargisseur d'aile gauche"),
-        _seul("RIGHTFENDER", "FenderFlareSetting", "Élargisseur d'aile droite"),
-    )),
-    # Hors garage : la strategie d'arrets enregistree avec le setup.
-    ("Arrêts au stand", (
-        _seul("GENERAL", "NumPitstopsSetting", "Arrêts prévus"),
-        *(_seul("GENERAL", f"Pitstop{n}Setting", f"Arrêt {n}") for n in (1, 2, 3)),
+    ("Hors garage", (
+        # La strategie d'arrets enregistree avec le setup.
+        ("Arrêts au stand", (
+            _seul("GENERAL", "NumPitstopsSetting", "Arrêts prévus"),
+            *(_seul("GENERAL", f"Pitstop{n}Setting", f"Arrêt {n}") for n in (1, 2, 3)),
+        )),
     )),
 )
 
 # Toutes les cles qui ont leur place ci-dessus, affichees ou non.
-RANGEES = {source for _, entrees in DISPOSITION
+RANGEES = {source for _, groupes in DISPOSITION for _, entrees in groupes
            for sources, _ in entrees for source in sources}
 
+ONGLET_AUTRES = "Hors garage"
 TITRE_AUTRES = "Autres réglages"
 
-# Reglages qui n'ont de sens qu'en presence d'un autre. `FuelSetting` est le
-# ratio de carburant des voitures a energie virtuelle ; sur celles qui se
-# remplissent en litres, il redit la charge divisee par cent (`0.88` pour
-# `88.0L`), deja lue dans « Carburant embarque ».
+# Reglages qui n'ont de sens qu'en presence d'un autre. `FuelSetting` est la
+# capacite en carburant des voitures a energie virtuelle, en fraction du
+# reservoir ; sur celles qui se remplissent en litres, il redit la charge
+# divisee par cent (`0.88` pour `88.0L`), deja lue dans « Carburant embarque ».
 CONDITIONNELLES = {("GENERAL", "FuelSetting"): ("GENERAL", "VirtualEnergySetting")}
 
 # Lues a part : ce sont des informations sur le fichier, pas des reglages.
@@ -376,6 +399,13 @@ META = {("", "VehicleClassSetting"), ("", "UpgradeSetting"),
         ("GENERAL", "Notes"), ("GENERAL", "Symmetric"),
         ("BASIC", "Downforce"), ("BASIC", "Balance"), ("BASIC", "Ride"),
         ("BASIC", "Gearing"), ("BASIC", "Custom")}
+
+
+def _entrees():
+    """Toutes les entrees, a plat, avec leur onglet et leur groupe."""
+    for onglet, groupes in DISPOSITION:
+        for titre, entrees in groupes:
+            yield onglet, titre, entrees
 
 
 def _visible(setup, source):
@@ -391,18 +421,44 @@ def _valeurs(setup, sources):
 
 
 def _cotes_egaux(sources, valeurs):
-    """Vrai pour une valeur seule, ou pour deux cotes qui portent le meme reglage."""
+    """Vrai si gauche et droite portent le meme reglage, ou s'il n'y a pas de cotes.
+
+    La gauche est toujours la premiere source, la droite la derniere : le 3e
+    ressort, au milieu, n'a pas de cote.
+    """
     if len(sources) == 1:
         return True
-    return _noyau(sources[0][1], valeurs[0]) == _noyau(sources[1][1], valeurs[1])
+    return _noyau(sources[0][1], valeurs[0]) == _noyau(sources[-1][1], valeurs[-1])
+
+
+def _colonnes(separes, troisieme):
+    if troisieme:
+        return (GAUCHE, TROISIEME, DROITE) if separes else (ROUES, TROISIEME)
+    return (GAUCHE, DROITE) if separes else ()
+
+
+def _ranger(valeurs, separes, troisieme):
+    """Place les valeurs d'une entree sous les colonnes de son groupe.
+
+    None marque une case vide — la hauteur de caisse n'a pas de 3e ressort —
+    a distinguer de "", un reglage que la voiture n'a pas.
+    """
+    if len(valeurs) == 1:
+        return valeurs
+    gauche, droite = valeurs[0], valeurs[-1]
+    centre = valeurs[1] if len(valeurs) == 3 else None
+    roues = [gauche, droite] if separes else [gauche or droite]
+    if troisieme:
+        roues.insert(1, centre)
+    return roues
 
 
 class Ligne:
-    """Un reglage pret a afficher : un libelle, une ou deux valeurs."""
+    """Un reglage pret a afficher : un libelle, une a trois valeurs."""
 
     def __init__(self, libelle, valeurs, sources=None):
         self.libelle = libelle
-        self.valeurs = valeurs      # liste : une valeur, ou gauche et droite
+        self.valeurs = valeurs      # une par colonne du groupe ; None : case vide
         self.sources = sources      # les (section, cle) d'origine
 
     @property
@@ -455,20 +511,21 @@ class Setup:
     def _est_symetrique(self):
         """Vrai si gauche et droite portent partout le meme reglage."""
         return all(_cotes_egaux(sources, _valeurs(self, sources))
-                   for _, entrees in DISPOSITION for sources, _ in entrees)
+                   for _, _, entrees in _entrees() for sources, _ in entrees)
 
     # --- mise en forme ---
 
     def groupes(self):
         """Les reglages renseignes, groupes et ordonnes comme dans le garage.
 
-        Rend une suite de `(titre, colonnes, lignes)`. Un groupe ne prend les
-        colonnes GAUCHE et DROITE que si l'un de ses reglages differe d'un
-        cote a l'autre : sinon `colonnes` est vide et chaque ligne n'a qu'une
-        valeur. L'usure du pneu et l'estimation en tours ne comptent pas.
+        Rend une suite de `(onglet, titre, colonnes, lignes)`. Un groupe ne
+        separe gauche et droite que si l'un de ses reglages differe d'un cote
+        a l'autre — l'usure du pneu et l'estimation en tours ne comptent pas —
+        et ne prend la colonne du 3e ressort que si la voiture en a un.
+        `colonnes` est vide quand chaque ligne n'a qu'une valeur.
         """
         blocs = []
-        for titre, entrees in DISPOSITION:
+        for onglet, titre, entrees in _entrees():
             rangees = [(sources, libelle, _valeurs(self, sources))
                        for sources, libelle in entrees]
             rangees = [r for r in rangees if any(r[2])]
@@ -476,19 +533,18 @@ class Setup:
                 continue
             separes = not all(_cotes_egaux(sources, valeurs)
                               for sources, _, valeurs in rangees)
-            lignes = []
-            for sources, libelle, valeurs in rangees:
-                if not (separes and len(valeurs) == 2):
-                    valeurs = [valeurs[0] or valeurs[-1]]
-                lignes.append(Ligne(libelle, valeurs, sources))
-            blocs.append((titre, COTES if separes else (), lignes))
+            troisieme = any(len(valeurs) == 3 and valeurs[1]
+                            for _, _, valeurs in rangees)
+            lignes = [Ligne(libelle, _ranger(valeurs, separes, troisieme), sources)
+                      for sources, libelle, valeurs in rangees]
+            blocs.append((onglet, titre, _colonnes(separes, troisieme), lignes))
 
         vus = RANGEES | META
         autres = [Ligne(cle, [self.affiche(section, cle)], ((section, cle),))
                   for (section, cle) in sorted(self.valeurs)
                   if (section, cle) not in vus and self.affiche(section, cle)]
         if autres:
-            blocs.append((TITRE_AUTRES, (), autres))
+            blocs.append((ONGLET_AUTRES, TITRE_AUTRES, (), autres))
         return blocs
 
     def __repr__(self):
@@ -717,30 +773,23 @@ ABSENT = "—"
 def comparer(gauche, droite):
     """Confronte deux setups, groupe par groupe, dans l'ordre du garage.
 
-    Rend `[(titre, [Ecart, ...]), ...]`. Un reglage gauche/droite tient en une
-    ligne si ses deux cotes se repondent dans l'un et l'autre setup ; sinon il
-    en donne deux, « · gauche » et « · droite » : replier masquerait justement
-    l'asymetrie qu'on cherche a voir.
+    Rend `[(onglet, titre, [Ecart, ...]), ...]`. Les roues d'un reglage
+    tiennent en une ligne si leurs deux cotes se repondent dans l'un et
+    l'autre setup ; sinon elles en donnent deux, « · gauche » et « · droite » :
+    replier masquerait justement l'asymetrie qu'on cherche a voir. Le 3e
+    ressort a toujours sa ligne a lui.
 
     La comparaison porte sur le texte normalise, jamais sur l'indice interne :
     le cran 6 ne designe pas le meme angle d'aileron d'une voiture a l'autre.
     """
     blocs = []
-    for titre, entrees in DISPOSITION:
+    for onglet, titre, entrees in _entrees():
         ecarts = []
         for sources, libelle in entrees:
             a, b = _valeurs(gauche, sources), _valeurs(droite, sources)
-            if not any(a + b):
-                continue
-            if _cotes_egaux(sources, a) and _cotes_egaux(sources, b):
-                ecarts.append(Ecart(libelle, a[0] or a[-1] or ABSENT,
-                                    b[0] or b[-1] or ABSENT, sources[0]))
-                continue
-            for source, cote, va, vb in zip(sources, ("gauche", "droite"), a, b):
-                ecarts.append(Ecart(f"{libelle} · {cote}", va or ABSENT,
-                                    vb or ABSENT, source))
+            ecarts.extend(_ecarts(sources, libelle, a, b))
         if ecarts:
-            blocs.append((titre, ecarts))
+            blocs.append((onglet, titre, ecarts))
 
     vus = RANGEES | META
     autres = []
@@ -751,13 +800,31 @@ def comparer(gauche, droite):
         if a or b:
             autres.append(Ecart(cle, a or ABSENT, b or ABSENT, (section, cle)))
     if autres:
-        blocs.append((TITRE_AUTRES, autres))
+        blocs.append((ONGLET_AUTRES, TITRE_AUTRES, autres))
     return blocs
+
+
+def _ecarts(sources, libelle, a, b):
+    """Les lignes de comparaison d'une entree, dans l'ordre des colonnes du jeu."""
+    if len(sources) == 1:
+        return [Ecart(libelle, a[0] or ABSENT, b[0] or ABSENT, sources[0])] \
+            if a[0] or b[0] else []
+
+    if _cotes_egaux(sources, a) and _cotes_egaux(sources, b):
+        cotes = [(libelle, 0, a[0] or a[-1], b[0] or b[-1])]
+    else:
+        cotes = [(f"{libelle} · gauche", 0, a[0], b[0]),
+                 (f"{libelle} · droite", len(sources) - 1, a[-1], b[-1])]
+    if len(sources) == 3:
+        cotes.insert(1, (f"{libelle} · 3e ressort", 1, a[1], b[1]))
+
+    return [Ecart(nom, va or ABSENT, vb or ABSENT, sources[indice])
+            for nom, indice, va, vb in cotes if va or vb]
 
 
 def resumer(blocs):
     """Nombre de lignes comparees, et nombre de lignes qui different."""
-    lignes = [e for _, ecarts in blocs for e in ecarts]
+    lignes = [e for _, _, ecarts in blocs for e in ecarts]
     return len(lignes), sum(1 for e in lignes if e.different)
 
 
@@ -769,13 +836,16 @@ def exporter(setup):
               f"modifié le {setup.modifie:%d/%m/%Y à %H:%M}"]
     if setup.notes:
         lignes.append(setup.notes.replace("\n", " · "))
-    for titre, colonnes, contenu in setup.groupes():
+    onglet_courant = None
+    for onglet, titre, colonnes, contenu in setup.groupes():
+        if onglet != onglet_courant:
+            lignes += ["", f"=== {onglet.upper()} ==="]
+            onglet_courant = onglet
         lignes.append("")
         lignes.append(titre.upper())
         if colonnes:
-            lignes.append(f"  {'':<34}{colonnes[0]:<22}{colonnes[1]}")
+            lignes.append(f"  {'':<36}" + "".join(f"{c:<22}" for c in colonnes).rstrip())
         for ligne in contenu:
-            valeurs = (f"{ligne.valeurs[0]:<22}{ligne.valeurs[1]}"
-                       if len(ligne.valeurs) == 2 else ligne.valeur)
-            lignes.append(f"  {ligne.libelle:<34}{valeurs}".rstrip())
+            valeurs = "".join(f"{v or '':<22}" for v in ligne.valeurs)
+            lignes.append(f"  {ligne.libelle:<36}{valeurs}".rstrip())
     return os.linesep.join(lignes)

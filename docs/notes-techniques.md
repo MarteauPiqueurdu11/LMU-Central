@@ -692,7 +692,8 @@ La deuxieme a une consequence visible : sans elle, trente setups passaient pour
 **asymetriques** parce qu'un pneu etait use a 94 % a gauche et a 96 % a droite.
 Une fois l'usure mise de cote, les 444 setups du disque sont symetriques.
 
-`FuelSetting` est le **ratio de carburant** des voitures a energie virtuelle :
+`FuelSetting` est la **capacite en carburant** des voitures a energie
+virtuelle, en fraction du reservoir (`0.97` pour `97.0l`) :
 il n'est affiche que si `VirtualEnergySetting` est renseigne (table
 `CONDITIONNELLES`). Sur les voitures qui se remplissent en litres, il redit la
 charge divisee par cent (`0.88` pour `88.0L`), deja lue dans « Carburant
@@ -726,21 +727,44 @@ d'un meme reglage.
 Tant qu'aucun setup n'est ouvert, le panneau de droite recapitule la collection
 voiture par voiture.
 
-Le panneau de droite suit **les onglets du garage du jeu**, dans leur ordre et
-avec leurs noms : Moteur, Electronique, Differentiel, Rapports, Roues avant et
-arriere, Freins, Suspension, Amortisseurs, Chassis avant et arriere, Aero, puis
-les arrets au stand, qui ne sont pas dans le garage. L'onglet Basique n'est pas
-repris : il ne fait que redire les autres. Toute la disposition tient dans une
-seule table, `DISPOSITION` : chaque entree y nomme sa source — une cle, ou une
-paire gauche/droite — et son libelle.
+Le panneau de droite **reproduit le garage du jeu en francais**, releve sur
+ses captures : memes onglets, memes sections, memes libelles, dans le meme
+ordre.
 
-**Gauche et droite ne prennent deux colonnes que si elles different.** Un
-groupe affiche GAUCHE et DROITE des qu'une de ses paires porte deux reglages
-distincts, usure et estimation en tours mises de cote ; sinon chaque ligne n'a
-qu'une valeur. Dans un groupe a deux colonnes, un reglage sans cote les occupe
-toutes les deux. La comparaison fait de meme ligne par ligne : une paire tient
-en une ligne si ses deux cotes se repondent dans les deux setups, sinon elle
-donne « · gauche » et « · droite ».
+| Onglet | Sections |
+|---|---|
+| Groupe motopropulseur | Moteur, Electronique, Differentiel, Passage de rapport |
+| Roues et freins | Roues avant, Roues arriere, Freins |
+| Suspension | Suspension avant, Suspension arriere |
+| Amortisseurs | Suspension avant, Suspension arriere (les titres du jeu) |
+| Chassis et aerodynamisme | Chassis avant, Chassis arriere, Poids, Chassis avance |
+| Hors garage | Arrets au stand, Autres reglages |
+
+L'onglet Basique n'est pas repris : il ne fait que redire les autres. Le jeu
+range parfois une cle loin de ce que son nom suggere : `FWSetting` est le
+« Diffuseur avant » du chassis, les ecopes de frein sont dans Freins, les
+caches de radiateur dans Moteur. « Poids » lit `CGHeightSetting`,
+`CGRightSetting` et `CGRearSetting`, « Chassis avance » les `ChassisAdjNN`.
+Une poignee de reglages qu'aucune voiture du disque n'expose (pompe de
+differentiel, decalage de pincement, barre Panhard, biais de suspension...)
+n'apparait sur aucune capture : ils gardent un libelle descriptif et leur
+place la plus probable.
+
+Toute la disposition tient dans une seule table, `DISPOSITION` : onglets,
+sections, puis chaque entree avec ses sources — une cle, une paire
+gauche/droite, ou un trio gauche / 3e ressort / droite — et son libelle.
+
+**Les colonnes suivent celles du jeu, sans rien repeter.** Le garage montre
+toujours A GAUCHE, 3E RESSORT et DROITE. Le hub ne separe gauche et droite que
+si l'un des reglages de la section differe d'un cote a l'autre, usure et
+estimation en tours mises de cote ; sinon les deux roues tiennent dans une
+colonne ROUES. La colonne 3E RESSORT n'apparait que si la voiture en a un. La
+hauteur de caisse et les cales de ressort n'ont pas de 3e ressort : leur case
+reste vide, comme au garage. Un reglage sans cote occupe toutes les colonnes.
+
+La comparaison fait de meme ligne par ligne : les roues tiennent en une ligne
+si leurs deux cotes se repondent dans les deux setups, sinon elles donnent
+« · gauche » et « · droite » ; le 3e ressort a sa ligne a lui.
 
 Une cle inconnue n'est jamais perdue : elle atterrit dans « Autres reglages »,
 triee, pour qu'une voiture ajoutee par une mise a jour ne fasse rien
