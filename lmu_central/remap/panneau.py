@@ -33,6 +33,7 @@ from . import config as cfg
 from . import moteur as mot
 
 INTERVALLE_POLL = 8  # millisecondes
+INTERVALLE_REPOS = 250  # millisecondes, quand rien n'est a scruter
 
 # Largeurs en dessous desquelles on replie plutot que de laisser couper :
 # le tableau des positions passe sur une colonne, la barre sur deux lignes.
@@ -482,7 +483,11 @@ class PanneauRemap(ctk.CTkFrame):
         if self.capture_en_cours:
             self._poll_capture()
 
-        self.after(INTERVALLE_POLL, self._boucle)
+        # Le volant ne se scrute finement que si le remap tourne ou qu'une
+        # capture attend un bouton : le reste du temps, la boucle somnole.
+        intervalle = (INTERVALLE_POLL if (self.moteur.actif or self.capture_en_cours)
+                      else INTERVALLE_REPOS)
+        self.after(intervalle, self._boucle)
 
     def _maj_position(self, indice, position):
         molette = self.config_app["molettes"][indice]

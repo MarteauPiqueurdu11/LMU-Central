@@ -13,17 +13,26 @@ directement.
 
 import time
 import tkinter as tk
+from concurrent.futures import ThreadPoolExecutor
 
 import keyboard
 import pygame
 
 from . import theme
 
+# Les frappes partent d'un thread a part : maintenir une touche bloquerait
+# sinon l'interface. Un seul ouvrier garde les frappes dans l'ordre.
+_FRAPPES = ThreadPoolExecutor(max_workers=1, thread_name_prefix="remap-touches")
+
 
 def init_pygame():
-    """Initialise pygame une seule fois."""
-    if not pygame.get_init():
-        pygame.init()
+    """Initialise pygame une seule fois.
+
+    Seuls l'affichage (requis par pygame.event.pump) et les joysticks servent :
+    pygame.init() ouvrirait en plus le mixer audio, inutile ici.
+    """
+    if not pygame.display.get_init():
+        pygame.display.init()
     if not pygame.joystick.get_init():
         pygame.joystick.init()
 
@@ -77,6 +86,15 @@ def trouver_volants(boutons_requis):
         if js.get_numbuttons() >= besoin:
             resultat.append(js)
     return resultat
+
+
+def _frapper(combinaison, duree):
+    """Enfonce la combinaison, la maintient `duree` secondes, la relache."""
+    try:
+        keyboard.press(combinaison)
+        time.sleep(duree)
+    finally:
+        keyboard.release(combinaison)
 
 
 class Molette:
@@ -180,11 +198,7 @@ class Molette:
         de capture de raccourci ne voient pas une frappe aussi breve.
         """
         duree = self.globale.get("duree_touche", 0.06)
-        try:
-            keyboard.press(combinaison)
-            time.sleep(duree)
-        finally:
-            keyboard.release(combinaison)
+        _FRAPPES.submit(_frapper, combinaison, duree)
 
 
 class Moteur:
