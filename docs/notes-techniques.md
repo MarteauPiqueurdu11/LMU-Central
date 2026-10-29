@@ -681,16 +681,13 @@ comparaison :
 
 La deuxieme a une consequence visible : sans elle, trente setups passaient pour
 **asymetriques** parce qu'un pneu etait use a 94 % a gauche et a 96 % a droite.
-Une fois l'usure mise de cote, les 444 setups du disque sont symetriques, et le
-tableau des roues tient en deux colonnes — avant, arriere — au lieu de quatre.
-Les quatre colonnes restent la pour un setup qui, lui, serait vraiment
-dissymetrique.
+Une fois l'usure mise de cote, les 444 setups du disque sont symetriques.
 
-`FuelSetting` est aussi laisse de cote : il redit `FuelCapacitySetting`, la
-meme charge divisee par cent (`0.88` pour `88.0L`) sur les voitures qui se
-remplissent en litres, et bloquee a `1.00` sur celles qui se remplissent en
-energie virtuelle. La ligne « Carburant » suffit, et elle porte en plus
-l'estimation en tours.
+`FuelSetting` est le **ratio de carburant** des voitures a energie virtuelle :
+il n'est affiche que si `VirtualEnergySetting` est renseigne (table
+`CONDITIONNELLES`). Sur les voitures qui se remplissent en litres, il redit la
+charge divisee par cent (`0.88` pour `88.0L`), deja lue dans « Carburant
+embarque » : il est alors tu, sans pour autant tomber dans « Autres reglages ».
 
 ### Lire et comparer
 
@@ -720,10 +717,25 @@ d'un meme reglage.
 Tant qu'aucun setup n'est ouvert, le panneau de droite recapitule la collection
 voiture par voiture.
 
-Le panneau de droite presente les valeurs dans l'ordre du garage du jeu, les
-quatre roues cote a cote. Une cle inconnue n'est jamais perdue : elle atterrit
-dans « Autres reglages », pour qu'une voiture ajoutee par une mise a jour ne
-fasse rien disparaitre en silence.
+Le panneau de droite suit **les onglets du garage du jeu**, dans leur ordre et
+avec leurs noms : Moteur, Electronique, Differentiel, Rapports, Roues avant et
+arriere, Freins, Suspension, Amortisseurs, Chassis avant et arriere, Aero, puis
+les arrets au stand, qui ne sont pas dans le garage. L'onglet Basique n'est pas
+repris : il ne fait que redire les autres. Toute la disposition tient dans une
+seule table, `DISPOSITION` : chaque entree y nomme sa source — une cle, ou une
+paire gauche/droite — et son libelle.
+
+**Gauche et droite ne prennent deux colonnes que si elles different.** Un
+groupe affiche GAUCHE et DROITE des qu'une de ses paires porte deux reglages
+distincts, usure et estimation en tours mises de cote ; sinon chaque ligne n'a
+qu'une valeur. Dans un groupe a deux colonnes, un reglage sans cote les occupe
+toutes les deux. La comparaison fait de meme ligne par ligne : une paire tient
+en une ligne si ses deux cotes se repondent dans les deux setups, sinon elle
+donne « · gauche » et « · droite ».
+
+Une cle inconnue n'est jamais perdue : elle atterrit dans « Autres reglages »,
+triee, pour qu'une voiture ajoutee par une mise a jour ne fasse rien
+disparaitre en silence.
 
 « Comparer avec… » epingle le setup ouvert ; choisir le suivant bascule le
 panneau en comparaison. Seules les lignes qui different sont montrees, et le

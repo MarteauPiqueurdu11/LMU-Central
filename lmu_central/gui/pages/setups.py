@@ -729,7 +729,7 @@ class SetupsPage(Page):
 
         tableau = ctk.CTkFrame(self.detail, fg_color="transparent")
         tableau.grid(row=rang, column=0, sticky="ew", padx=12)
-        # Une valeur seule a toute la place ; quatre roues se la partagent.
+        # Une valeur seule a toute la place ; gauche et droite se la partagent.
         souhaitee = LARGEUR_VALEUR if colonnes else LARGEUR_VALEUR_SEULE
         intitule, largeur = self._largeurs(colonnes, souhaitee)
         nombre = len(colonnes) or 1
@@ -753,11 +753,16 @@ class SetupsPage(Page):
                          font=self.f["small"], text_color=theme.TEXT_DIM,
                          anchor="w").grid(row=interne, column=0, sticky="ew",
                                           pady=2)
+            # Dans un groupe a deux colonnes, un reglage sans cote les prend
+            # toutes les deux.
+            etendue = nombre if len(ligne.valeurs) == 1 else 1
             for index, valeur in enumerate(ligne.valeurs):
-                ctk.CTkLabel(tableau, text=tronquer(valeur or st.ABSENT, largeur),
+                ctk.CTkLabel(tableau, text=tronquer(valeur or st.ABSENT,
+                                                    largeur * etendue),
                              font=self.f["small"], text_color=theme.TEXT,
                              anchor="w").grid(row=interne, column=index + 1,
-                                              sticky="ew", padx=(8, 0), pady=2)
+                                              columnspan=etendue, sticky="ew",
+                                              padx=(8, 0), pady=2)
             interne += 1
         return rang + 1
 
