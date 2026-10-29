@@ -104,9 +104,27 @@ class RaceOS:
     # --- lectures ---
 
     def friends(self, sync=False):
-        """Amis Steam avec leurs ratings (ELO masque par le serveur)."""
+        """Amis Steam avec leurs ratings (ELO masque par le serveur).
+
+        `sync` demande au backend de **relire** la liste depuis Steam au lieu
+        de servir celle qu'il garde en memoire. Le jeu s'en charge quand on
+        ouvre ses ecrans multijoueur ; un compte qui n'a fait que se
+        connecter — exactement ce que le hub demande — peut donc n'avoir
+        jamais ete synchronise, et sa liste reste vide.
+
+        On ne reclame la synchronisation que si la liste revient vide : c'est
+        le seul cas ou il n'y a de toute facon rien a montrer, et cela evite
+        d'imposer ce travail au serveur a chaque consultation.
+        """
+        amis = self._friends(sync)
+        if amis or sync:
+            return amis
+        return self._friends(True)
+
+    def _friends(self, sync):
         return self.fetch("api/v1/player/friends-list",
-                          body={"platform": PLATFORM, "game": GAME, "sync": sync}) or []
+                          body={"platform": PLATFORM, "game": GAME,
+                                "sync": sync}) or []
 
     def statistics(self, player_ids):
         """Courses et victoires, pour un ou plusieurs joueurs."""

@@ -117,8 +117,20 @@ class VueAmis(ctk.CTkFrame):
             enfant.destroy()
         amis = sorted(data.friends, key=_tri_ami, reverse=True)
         if not amis:
-            ctk.CTkLabel(self.liste, text="Aucun ami à afficher.", font=self.f["small"],
-                         text_color=theme.TEXT_FAINT, anchor="w").grid(
+            # Un panneau vide se lit comme une panne. Il a trois causes, et
+            # aucune n'est visible depuis l'ecran : on les nomme.
+            ctk.CTkLabel(
+                self.liste,
+                text="Aucun ami à afficher.\n\n"
+                     "La liste vient de Steam, pas du jeu. Un ami n'y figure "
+                     "que s'il est dans tes amis Steam et qu'il a déjà joué à "
+                     "Le Mans Ultimate.\n"
+                     "Le hub vient de demander à Steam de resynchroniser la "
+                     "liste. Si elle reste vide, vérifie que tes amis Steam "
+                     "ne sont pas masqués par la confidentialité de ton "
+                     "profil, puis clique sur Actualiser.",
+                font=self.f["small"], text_color=theme.TEXT_FAINT,
+                anchor="w", justify="left").grid(
                 row=0, column=0, sticky="ew", padx=16, pady=8)
             return
         colonnes = len(self._colonnes())
