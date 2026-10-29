@@ -543,8 +543,17 @@ minute par minute et livrees — 10 Ko au lieu de plusieurs centaines.
 > classe `Event` du bundle du jeu le declare pourtant, mais comme valeur par
 > defaut — lire le code ne suffisait pas, il fallait appeler.
 
-Le detail coute un aller-retour par epreuve : on le reserve aux huit
-prochaines, les seules ou l'inscription d'un ami a un interet.
+Le detail coute un aller-retour par epreuve. Pour les quotidiennes, on le
+reserve aux huit prochaines : leurs inscriptions n'ouvrent que trente minutes
+avant le depart, plus loin il n'y a personne a trouver. Les epreuves
+speciales, elles, sont **toutes** detaillees (`SANS_QUOTA`) : elles
+s'inscrivent des jours a l'avance, et un ami engage sur une course de la
+semaine suivante echappait aux huit plus proches. Mesure du 29 octobre 2026 :
+38 speciales ouvertes, dont 30 n'etaient jamais regardees.
+
+Les appels partent six a la fois (`APPELS_SIMULTANES`) : en file, les 62
+allers-retours faisaient passer le chargement de 4,8 s a 12 s ; en parallele,
+il tombe a 3 s.
 
 ### Les amis en course
 

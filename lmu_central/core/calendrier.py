@@ -55,6 +55,7 @@ par un ticket Steam — donc jeu ouvert, ou ferme depuis moins d'une demi-heure.
 
 import datetime
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from . import cache
 from .errors import HubError
@@ -72,10 +73,20 @@ LIBELLES_NIVEAU = {"beginner": "Débutant", "intermediate": "Intermédiaire",
                    "specialevent": "Spéciale"}
 
 # Occurrences demandees par niveau a `daily/list`, et epreuves enrichies par
-# `event/overview`. Chaque enrichissement coute un aller-retour : on le reserve
-# aux plus proches, les seules ou l'inscription d'un ami a un interet.
+# `event/overview`. Chaque enrichissement coute un aller-retour : pour les
+# quotidiennes, on le reserve aux plus proches, les seules ou l'inscription
+# d'un ami a un interet — elles n'ouvrent que trente minutes avant le depart.
 PAR_NIVEAU = 8
 ENRICHIES = 8
+
+# Types enrichis sans quota. Les epreuves speciales s'inscrivent des jours a
+# l'avance : un ami engage sur une course de la semaine prochaine n'est pas
+# parmi les huit plus proches, et le hub le taisait.
+SANS_QUOTA = {"specialevent"}
+
+# Appels `event/overview` menes de front. Toutes les speciales, c'est une
+# quarantaine d'allers-retours : en file, ils doublaient le chargement.
+APPELS_SIMULTANES = 6
 
 # Jusqu'ou prolonger les horaires en partant de la rotation. Deux jours
 # suffisent a planifier, et restent dans la semaine en cours.
@@ -540,26 +551,24 @@ def _enrichir(ros, epreuves, combien):
     quotidiennes partant toutes les dix minutes, les plus proches sont
     forcement quotidiennes : un quota global aurait condamne les epreuves
     speciales a ne jamais montrer leurs amis inscrits, alors que ce sont
-    justement celles qu'on prepare a l'avance.
+    justement celles qu'on prepare a l'avance. Les types de `SANS_QUOTA`
+    sont enrichis en entier.
 
     Une epreuve lancee ne publie plus ses `friends` : on lit alors ses engages,
     et la liste d'amis n'est demandee qu'a ce moment-la.
     """
     proches = []
     for type_epreuve in {e.type for e in epreuves}:
+        limite = None if type_epreuve in SANS_QUOTA else combien
         proches.extend(
             [e for e in sorted(epreuves, key=lambda e: e.debut)
-             if e.type == type_epreuve and e.identifiant and not e.passee][:combien])
+             if e.type == type_epreuve and e.identifiant and not e.passee][:limite])
+
+    with ThreadPoolExecutor(max_workers=APPELS_SIMULTANES) as appels:
+        details = list(appels.map(lambda e: _detail(ros, e), proches))
 
     amis = None
-    for epreuve in proches:
-        try:
-            detail = ros.fetch("api/v1/event/overview",
-                               body={"game": "lmu", "eventType": epreuve.type,
-                                     "eventId": epreuve.identifiant},
-                               method="POST")
-        except HubError:
-            detail = None
+    for epreuve, detail in zip(proches, details):
         if isinstance(detail, dict):
             epreuve.detailler(detail)
 
@@ -572,6 +581,17 @@ def _enrichir(ros, epreuves, combien):
                 epreuve.amis = _amis_parmi(_engages(ros, epreuve), amis)
         except HubError:
             continue
+
+
+def _detail(ros, epreuve):
+    """La reponse de `event/overview` pour une epreuve, ou None."""
+    try:
+        return ros.fetch("api/v1/event/overview",
+                         body={"game": "lmu", "eventType": epreuve.type,
+                               "eventId": epreuve.identifiant},
+                         method="POST")
+    except HubError:
+        return None
 
 
 def _resume_speciales(series):
