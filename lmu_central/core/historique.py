@@ -155,6 +155,11 @@ def variations(limite=10):
     return list(reversed(paires))[:limite]
 
 
+def points():
+    """Tous les releves, du plus ancien au plus recent."""
+    return _lire()
+
+
 def nombre_de_points():
     return len(_lire())
 

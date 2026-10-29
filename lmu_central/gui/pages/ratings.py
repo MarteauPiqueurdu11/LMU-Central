@@ -1,20 +1,21 @@
 """Page Driver & Safety Rating.
 
-Le bas de la page bascule entre deux vues : les amis Steam, ou l'historique
-complet des courses avec ses filtres.
+Le bas de la page bascule entre trois vues : les amis Steam, l'historique
+complet des courses avec ses filtres, ou la courbe du DR et du SR.
 """
 
 from ...core import courses as courses_core
 from ...core import ratings as ratings_core
 from ...core.timefmt import local_time
 from .. import responsive, theme
+from ..courbes import VueCourbes
 from ..vues import VueAmis, VueCourses
 from ..widgets import Card, RatingCard
 from .base import Page
 
 import customtkinter as ctk
 
-AMIS, COURSES = "Amis Steam", "Historique"
+AMIS, COURSES, COURBES = "Amis Steam", "Historique", "Courbes"
 
 # En dessous de cette largeur, les deux cartes de rating ne tiennent plus cote
 # a cote sans se marcher dessus : on les empile.
@@ -101,7 +102,7 @@ class RatingsPage(Page):
         barre.grid_columnconfigure(1, weight=1)
 
         self.selecteur = ctk.CTkSegmentedButton(
-            barre, values=[AMIS, COURSES], font=self.f["small"], height=30,
+            barre, values=[AMIS, COURSES, COURBES], font=self.f["small"], height=30,
             corner_radius=8, command=self._changer_vue,
             selected_color=theme.ACCENT, selected_hover_color=theme.ACCENT_HI,
             unselected_color=theme.SURFACE_HI, unselected_hover_color=theme.BORDER,
@@ -116,18 +117,24 @@ class RatingsPage(Page):
         self.vue_amis = VueAmis(carte, self.f)
         self.vue_courses = VueCourses(carte, self.f, self.app.run_async,
                                       au_changement=self._maj_compteur)
+        self.vue_courbes = VueCourbes(carte, self.f)
         self.vue_amis.grid(row=1, column=0, sticky="nsew")
 
-    # --- navigation entre les deux vues ---
+    # --- navigation entre les vues ---
 
     def _changer_vue(self, valeur):
         self.vue_amis.grid_forget()
         self.vue_courses.grid_forget()
+        self.vue_courbes.grid_forget()
         if valeur == COURSES:
             self.vue_courses.grid(row=1, column=0, sticky="nsew")
             self._maj_compteur(self.vue_courses.filtrees, self.vue_courses.affichees)
             if not self._courses_chargees:
                 self._charger_courses()
+        elif valeur == COURBES:
+            self.vue_courbes.grid(row=1, column=0, sticky="nsew")
+            self.compteur.configure(text="")
+            self.vue_courbes.recharger()
         else:
             self.vue_amis.grid(row=1, column=0, sticky="nsew")
             self.compteur.configure(text="")
@@ -211,5 +218,8 @@ class RatingsPage(Page):
                                    extra=f"Contacts par tour {contact:.3f}" if contact else "")
 
         self.vue_amis.remplir(data)
+        # Le chargement vient peut-etre d'ajouter un releve a l'historique.
+        if self.selecteur.get() == COURBES:
+            self.vue_courbes.recharger()
         self.app.set_status(
             f"Hors ligne · {local_time(data.fetched_at)}" if data.offline else "À jour")

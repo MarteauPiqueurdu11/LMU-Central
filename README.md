@@ -27,7 +27,7 @@ utilisateur.
 
 | Onglet | Ce qu'il fait |
 |---|---|
-| **Ratings** | Ton DR et ton SR au centième de pourcent — le jeu les arrondit à la dizaine. Les ratings de tes amis Steam, et l'historique de toutes tes courses avec le gain ou la perte exacte de chacune. |
+| **Ratings** | Ton DR et ton SR au centième de pourcent — le jeu les arrondit à la dizaine. Les ratings de tes amis Steam, et l'historique de toutes tes courses avec le gain ou la perte exacte de chacune. Et la courbe de ton DR et de ton SR sur 7, 30 ou 90 jours, sur fond de bandes de rang. |
 | **Calendrier** | Les épreuves à venir : quotidiennes, hebdomadaires, spéciales et championnats. Avec les amis déjà inscrits, et le compte à rebours avant chaque départ. |
 | **Setups** | Tes setups rangés par circuit, avec la valeur de chaque réglage, la comparaison de deux setups côte à côte, et un bouton pour retrouver le fichier dans son dossier. || **Macros Volant** | Transforme les molettes crantées du volant en raccourcis : une position = une frappe. Avec un overlay en jeu pour savoir où tu en es. |
 
